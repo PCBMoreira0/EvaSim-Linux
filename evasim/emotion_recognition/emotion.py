@@ -4,7 +4,7 @@ import cv2
 import mediapipe as mp
 
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers.experimental.preprocessing import Rescaling
+from tensorflow.keras.layers import Rescaling
 from tensorflow.keras.layers import Conv2D, MaxPool2D, Dense, Dropout, Flatten
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.losses import categorical_crossentropy

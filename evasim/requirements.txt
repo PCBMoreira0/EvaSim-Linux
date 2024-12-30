@@ -1,0 +1,7 @@
+ibm_cloud_sdk_core
+ibm_watson
+mediapipe
+numpy
+paho_mqtt
+pyzbar
+tensorflow
