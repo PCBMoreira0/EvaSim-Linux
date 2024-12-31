@@ -13,7 +13,8 @@ import os
 import random as rnd
 import xml.etree.ElementTree as ET
 
-import eva_memory # EvaSIM memory module
+from eva_memory import EvaMemory # EvaSIM memory module
+
 import json_to_evaml_conv # json to XML conversion module (No longer used in this version of the simulator)
 
 from tkinter import *
@@ -49,7 +50,7 @@ TTS_IBM_WATSON = False # Define the use of IBM Watson service
 ROBOT_MODE_ENABLED = False # 
 
 
-class Eva_Sim:
+class EvaSim:
     def __init__(self):
         global TTS_IBM_WATSON, ROBOT_MODE_ENABLED
         if len(sys.argv) > 1: # Verify if is an argument in the command line
@@ -160,6 +161,9 @@ class Eva_Sim:
         self.thread_pop_pause = False
         self.play = False # self.play status of the script. This variable has an influence on the function. link_process
         self.script_file = "" # Variable that stores the pointer to the xml script file on disk.
+
+        # Eva memory
+        self.memory = EvaMemory()
 
         # Create the Tkinter window
         self.window = Tk()
@@ -281,8 +285,8 @@ class Eva_Sim:
         for i in self.gui.tab_vars.get_children(): # Clear table values
             self.gui.tab_vars.delete(i)
 
-        for var_name in eva_memory.vars: # Read memory by inserting values ​​into the table
-            self.gui.tab_vars.insert(parent='',index='end',text='', values=(var_name, eva_memory.vars[var_name]))
+        for var_name in self.memory.vars: # Read memory by inserting values ​​into the table
+            self.gui.tab_vars.insert(parent='',index='end',text='', values=(var_name, self.memory.vars[var_name]))
 
 
 
@@ -292,8 +296,8 @@ class Eva_Sim:
         for i in self.gui.tab_dollar.get_children(): # Clear table values
             self.gui.tab_dollar.delete(i)
     
-        for var_dollar in eva_memory.var_dolar: # Read memory by inserting values ​​into the table
-            if indice == len(eva_memory.var_dolar):
+        for var_dollar in self.memory.var_dolar: # Read memory by inserting values ​​into the table
+            if indice == len(self.memory.var_dolar):
                 var_name = "$"
             else:
                 var_name = "$" + str(indice)
@@ -341,9 +345,9 @@ class Eva_Sim:
     def runScript(self):
         # initialize the robot memory
         print("Intializing the robot memory.")
-        eva_memory.var_dolar = []
-        eva_memory.vars = {}
-        eva_memory.reg_case = 0
+        self.memory.var_dolar = []
+        self.memory.vars = {}
+        self.memory.reg_case = 0
         # Cleaning the tables
         print("Clearing memory map tables.")
         self.tab_load_mem_dollar()
@@ -663,10 +667,12 @@ class Eva_Sim:
             self.gui.canvas.create_image(340, 285, image = self.gui.bulb_image) # redesenha a lampada
 
 
+
     # Virtual machine functions
     # Execute the commands
     def exec_comando(self, node):
         global img_neutral, img_happy, img_angry, img_sad, img_surprise
+        
         if node.tag == "voice":
             self.gui.terminal.insert(INSERT, "\nSTATE: Selected Voice => " + node.attrib["tone"])
             self.gui.terminal.see(tkinter.END)
@@ -778,16 +784,16 @@ class Eva_Sim:
                 exit(1)
     
             if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                eva_memory.var_dolar.append([str(rnd.randint(int(min), int(max))), "<random>"])
-                self.gui.terminal.insert(INSERT, "\nSTATE: Generating a random number (using the variable $): " + eva_memory.var_dolar[-1][0])
+                self.memory.var_dolar.append([str(rnd.randint(int(min), int(max))), "<random>"])
+                self.gui.terminal.insert(INSERT, "\nSTATE: Generating a random number (using the variable $): " + self.memory.var_dolar[-1][0])
                 self.tab_load_mem_dollar()
                 self.gui.terminal.see(tkinter.END)
-                print("random command, min = " + min + ", max = " + max + ", valor = " + eva_memory.var_dolar[-1][0])
+                print("random command, min = " + min + ", max = " + max + ", valor = " + self.memory.var_dolar[-1][0])
             else:
                 var_name = node.attrib["var"]
-                eva_memory.vars[var_name] = str(rnd.randint(int(min), int(max)))
-                print("Eva ram => ", eva_memory.vars)
-                self.gui.terminal.insert(INSERT, "\nSTATE: Generating a random number (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
+                self.memory.vars[var_name] = str(rnd.randint(int(min), int(max)))
+                print("Eva ram => ", self.memory.vars)
+                self.gui.terminal.insert(INSERT, "\nSTATE: Generating a random number (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
                 self.tab_load_mem_vars() # Enter data from variable memory into the var table
                 self.gui.terminal.see(tkinter.END)
                 print("random command USING VAR, min = " + min + ", max = " + max + ", valor = ")
@@ -810,16 +816,16 @@ class Eva_Sim:
                     pass
                 
                 if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    eva_memory.var_dolar.append([self.EVA_DOLLAR, "<listen>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): var = $" + ", value = " + eva_memory.var_dolar[-1][0])
+                    self.memory.var_dolar.append([self.EVA_DOLLAR, "<listen>"])
+                    self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): var = $" + ", value = " + self.memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
                     self.ledAnimation("STOP")
                     
                 else:
                     var_name = node.attrib["var"]
-                    eva_memory.vars[var_name] = self.EVA_DOLLAR
-                    print("Eva ram => ", eva_memory.vars)
+                    self.memory.vars[var_name] = self.EVA_DOLLAR
+                    print("Eva ram => ", self.memory.vars)
                     self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                     self.tab_load_mem_vars() # Enter data from variable memory into the var table
                     self.gui.terminal.see(tkinter.END)
@@ -833,16 +839,16 @@ class Eva_Sim:
                 def fechar_pop_ret(s): 
                     print(var.get())
                     if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                        eva_memory.var_dolar.append([var.get(), "<listen>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): var = $" + ", value = " + eva_memory.var_dolar[-1][0])
+                        self.memory.var_dolar.append([var.get(), "<listen>"])
+                        self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): var = $" + ", value = " + self.memory.var_dolar[-1][0])
                         self.tab_load_mem_dollar()
                         self.gui.terminal.see(tkinter.END)
                         pop.destroy()
                         self.unlock_thread_pop() # Reactivate the script processing thread
                     else:
                         var_name = node.attrib["var"]
-                        eva_memory.vars[var_name] = var.get()
-                        print("Eva ram => ", eva_memory.vars)
+                        self.memory.vars[var_name] = var.get()
+                        print("Eva ram => ", self.memory.vars)
                         self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): (using the user variable '" + var_name + "'): " + var.get())
                         self.tab_load_mem_vars() # Enter data from variable memory into the var table
                         self.gui.terminal.see(tkinter.END)
@@ -854,16 +860,16 @@ class Eva_Sim:
                 def fechar_pop_bt(): 
                     print(var.get())
                     if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                        eva_memory.var_dolar.append([var.get(), "<listen>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + ">: var = $" + ", value = " + eva_memory.var_dolar[-1][0])
+                        self.memory.var_dolar.append([var.get(), "<listen>"])
+                        self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + ">: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                         self.tab_load_mem_dollar()
                         self.gui.terminal.see(tkinter.END)
                         pop.destroy()
                         self.unlock_thread_pop() # Reactivate the script processing thread
                     else:
                         var_name = node.attrib["var"]
-                        eva_memory.vars[var_name] = var.get()
-                        print("Eva ram => ", eva_memory.vars)
+                        self.memory.vars[var_name] = var.get()
+                        print("Eva ram => ", self.memory.vars)
                         self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): (using the user variable '" + var_name + "'): " + var.get())
                         self.tab_load_mem_vars() # Enter data from variable memory into the var table
                         self.gui.terminal.see(tkinter.END)
@@ -908,15 +914,15 @@ class Eva_Sim:
             # Replace variables throughout the text. variables must exist in memory
             if "#" in texto:
                 # Checks if the robot's memory (vars) is empty
-                if eva_memory.vars == {}:
+                if self.memory.vars == {}:
                     self.gui.terminal.insert(INSERT, "\nError -> No variables have been defined. Please, check your code.", "error")
                     self.gui.terminal.see(tkinter.END)
                     exit(1)
     
                 var_list = re.findall(r'\#[a-zA-Z]+[0-9]*', texto) # Generate list of occurrences of vars (#...)
                 for v in var_list:
-                    if v[1:] in eva_memory.vars:
-                        texto = texto.replace(v, str(eva_memory.vars[v[1:]]))
+                    if v[1:] in self.memory.vars:
+                        texto = texto.replace(v, str(self.memory.vars[v[1:]]))
                     else:
                         # If the variable does not exist in the robot's memory, it disself.plays an error message
                         print("================================")
@@ -928,7 +934,7 @@ class Eva_Sim:
             # This part replaces the $, or the $-1 or the $1 in the text
             if "$" in texto: # Check if there is $ in the text
                 # Checks if var_dollar has any value in the robot's memory
-                if (len(eva_memory.var_dolar)) == 0:
+                if (len(self.memory.var_dolar)) == 0:
                     self.gui.terminal.insert(INSERT, "\nError-> The variable $ has no value. Please, check your code.", "error")
                     self.gui.terminal.see(tkinter.END)
                     exit(1)
@@ -937,14 +943,14 @@ class Eva_Sim:
                     dollars_list = sorted(dollars_list, key=len, reverse=True) # Sort the list in descending order of length (of the element)
                     for var_dollar in dollars_list:
                         if len(var_dollar) == 1: # Is the dollar ($)
-                            texto = texto.replace(var_dollar, eva_memory.var_dolar[-1][0])
+                            texto = texto.replace(var_dollar, self.memory.var_dolar[-1][0])
                         else: # May be of type $n or $-n
                             if "-" in var_dollar: # $-n type
                                 indice = int(var_dollar[2:]) # Var dollar is of type $-n. then just take n and convert it to int
-                                texto = texto.replace(var_dollar, eva_memory.var_dolar[-(indice + 1)][0]) 
+                                texto = texto.replace(var_dollar, self.memory.var_dolar[-(indice + 1)][0]) 
                             else: # tipo $n
                                 indice = int(var_dollar[1:]) # Var dollar is of type $n. then just take n and convert it to int
-                                texto = texto.replace(var_dollar, eva_memory.var_dolar[(indice - 1)][0])
+                                texto = texto.replace(var_dollar, self.memory.var_dolar[(indice - 1)][0])
                 
             # This part implements the random text generated by using the / character
             texto = texto.split(sep="/") # Text becomes a list with the number of sentences divided by character. /
@@ -1065,7 +1071,7 @@ class Eva_Sim:
     ##########################################################
         elif node.tag == "case": 
             global valor
-            eva_memory.reg_case = 0 # Clear the case flag
+            self.memory.reg_case = 0 # Clear the case flag
             valor = node.attrib["value"]
             valor = valor.lower() # Comparisons are not case sensitive
             # Handles comparison types and operators
@@ -1074,52 +1080,52 @@ class Eva_Sim:
                 # Case in which a user variable was defined for a command: QRcode, random, userEmotion or userId
                 if node.attrib['var'] != "$":
                     # It remains to check whether the variable exists in the robot's memory
-                    # eva_memory.vars[st_var_value[1:]
-                    print("value: ", valor, type(valor), node.attrib['var'], eva_memory.vars[node.attrib['var']])
+                    # self.memory.vars[st_var_value[1:]
+                    print("value: ", valor, type(valor), node.attrib['var'], self.memory.vars[node.attrib['var']])
                     if valor[0] == "#": # é uma referência a uma variável
                         valor = valor[1:] # remove o # da referência
-                    if valor == str(eva_memory.vars[node.attrib['var']]).lower(): # Comparação de STRINGS
+                    if valor == str(self.memory.vars[node.attrib['var']]).lower(): # Comparação de STRINGS
                         print("case = true")
-                        eva_memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
+                        self.memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
     
                 # Checks if var_dollar memory has any value
-                elif (len(eva_memory.var_dolar)) == 0:
+                elif (len(self.memory.var_dolar)) == 0:
                     self.gui.terminal.insert(INSERT, "\nError -> The variable $ has no value. Please, check your code.", "error")
                     self.gui.terminal.see(tkinter.END)
                     exit(1)  
     
                 
-                elif valor == eva_memory.var_dolar[-1][0].lower():
+                elif valor == self.memory.var_dolar[-1][0].lower():
                     # Compare value with the top of the stack of the var_dollar variable
                     print("value: ", valor, type(valor))
                     print("case = true")
-                    eva_memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+                    self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
             
             # Case 2 (op = "contain")
             elif node.attrib['op'] == "contain":      
                 # Checa se a comparação é com o dollar
                 if "$" == node.attrib['var'][0]:
-                    if (len(eva_memory.var_dolar)) == 0: # Checks if var_dollar memory has any value
+                    if (len(self.memory.var_dolar)) == 0: # Checks if var_dollar memory has any value
                         self.gui.terminal.insert(INSERT, "\nError -> The variable $ has no value. Please, check your code.", "error")
                         self.gui.terminal.see(tkinter.END)
                         exit(1)  
                     else:
                         # Checks if the string in value is contained in $
                         print("value: ", valor, type(valor))
-                        if valor in eva_memory.var_dolar[-1][0].lower(): 
+                        if valor in self.memory.var_dolar[-1][0].lower(): 
                             print("case = true")
-                            eva_memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
+                            self.memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
                 # se não é com dollar então é com uma var do usuário
-                elif node.attrib['var'] in eva_memory.vars: # verifica se a variável de usuário existe na memória
+                elif node.attrib['var'] in self.memory.vars: # verifica se a variável de usuário existe na memória
                     if "#" == valor[0]:
                         valor = valor[1:]
-                        if str(eva_memory.vars[valor]).lower() in str(eva_memory.vars[node.attrib['var']]).lower():
+                        if str(self.memory.vars[valor]).lower() in str(self.memory.vars[node.attrib['var']]).lower():
                             print("case = true")
-                            eva_memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
+                            self.memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
                     else:
-                        if valor in eva_memory.vars[node.attrib['var']]:
+                        if valor in self.memory.vars[node.attrib['var']]:
                             print("case = true")
-                            eva_memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
+                            self.memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
                 else:
                     self.gui.terminal.insert(INSERT, "\nError -> The variable '" + node.attrib['var'] + "' does no exist. Please, check your code.", "error")
                     self.gui.terminal.see(tkinter.END)
@@ -1137,30 +1143,30 @@ class Eva_Sim:
                     # Is $?
                     if st_var_value == "$":
                         # Checks if var_dollar memory has any value
-                        if (len(eva_memory.var_dolar)) == 0:
+                        if (len(self.memory.var_dolar)) == 0:
                             self.gui.terminal.insert(INSERT, "\nError -> The variable $ has no value. Please, check your code.", "error")
                             self.gui.terminal.see(tkinter.END)
                             exit(1)
-                        return int(eva_memory.var_dolar[-1][0]) # Returns the value of $ converted for int
+                        return int(self.memory.var_dolar[-1][0]) # Returns the value of $ converted for int
     
                     # Is a variable of type #n?
                     if "#" in st_var_value:
                         # Checks if var #... DOES NOT exist in memory
-                        if (st_var_value[1:] not in eva_memory.vars):
+                        if (st_var_value[1:] not in self.memory.vars):
                             error_string = "\nError -> The variable #" + valor[1:] + " has not been declared. Please, check your code."
                             self.gui.terminal.insert(INSERT, error_string, "error")
                             self.gui.terminal.see(tkinter.END)
                             exit(1)
-                        return int(eva_memory.vars[st_var_value[1:]]) # Returns the value of #n converted for int
+                        return int(self.memory.vars[st_var_value[1:]]) # Returns the value of #n converted for int
                     
                     # If it is not a number, nor a dollar, nor a #, then it is a variable of this type var = "x" in <switch>
                     # Checks if the variable exists in memory
-                    if (st_var_value not in eva_memory.vars):
+                    if (st_var_value not in self.memory.vars):
                         error_string = "\nError -> The variable #" + valor[1:] + " has not been declared. Please, check your code."
                         self.gui.terminal.insert(INSERT, error_string, "error")
                         self.gui.terminal.see(tkinter.END)
                         exit(1)
-                    return int(eva_memory.vars[st_var_value]) # Returns the value of n converted for int
+                    return int(self.memory.vars[st_var_value]) # Returns the value of n converted for int
     
                 # Obtains the operands to perform mathematical comparison operations
                 # The restriction on not using constants in var of <switch> was guaranteed in the parser
@@ -1171,37 +1177,37 @@ class Eva_Sim:
                 if node.attrib['op'] == "eq": # Equality
                     if op1 == op2: # It is needed to remove the # from the variable
                         print("case = true")
-                        eva_memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+                        self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
     
                 elif node.attrib['op'] == "lt": # Less than
                     if op1 < op2:
                         print("case = true")
-                        eva_memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+                        self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
     
                 elif node.attrib['op'] == "gt": # Greater than
                     if op1 > op2:
                         print("case = true")
-                        eva_memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+                        self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
                 
                 elif node.attrib['op'] == "lte": # Less than or Equal
                     if op1 <= op2:
                         print("case = true")
-                        eva_memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+                        self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
     
                 elif node.attrib['op'] == "gte": # Greater than or Equal
                     if op1 >= op2:
                         print("case = true")
-                        eva_memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+                        self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
     
                 elif node.attrib['op'] == "ne": # Not equal
                     if op1 != op2:
                         print("case = true")
-                        eva_memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true        
+                        self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true        
     
     
         elif node.tag == "default": # Default is always true
             print("Default = true")
-            eva_memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+            self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
     
     
         elif node.tag == "counter":
@@ -1210,29 +1216,29 @@ class Eva_Sim:
             op = node.attrib["op"]
             # Checks if the operation is different from assignment and checks if var ... DOES NOT exist in memory
             if op != "=":
-                if (var_name not in eva_memory.vars):
+                if (var_name not in self.memory.vars):
                     error_string = "\nError -> The variable " + var_name + " has not been declared. Please, check your code."
                     self.gui.terminal.insert(INSERT, error_string, "error")
                     self.gui.terminal.see(tkinter.END)
                     exit(1)
     
             if op == "=": # Perform the assignment
-                eva_memory.vars[var_name] = var_value
+                self.memory.vars[var_name] = var_value
     
             if op == "+": # Perform the addition
-                eva_memory.vars[var_name] += var_value
+                self.memory.vars[var_name] += var_value
     
             if op == "*": # Perform the product
-                eva_memory.vars[var_name] *= var_value
+                self.memory.vars[var_name] *= var_value
     
             if op == "/": # Performs the division (it was /=) but I changed it to //= (integer division)
-                eva_memory.vars[var_name] //= var_value
+                self.memory.vars[var_name] //= var_value
     
             if op == "%": # Calculate the module
-                eva_memory.vars[var_name] %= var_value
+                self.memory.vars[var_name] %= var_value
             
-            print("Eva ram => ", eva_memory.vars)
-            self.gui.terminal.insert(INSERT, "\nSTATE: Counter: var = " + var_name + ", value = " + str(var_value) + ", op(" + op + "), result = " + str(eva_memory.vars[var_name]))
+            print("Eva ram => ", self.memory.vars)
+            self.gui.terminal.insert(INSERT, "\nSTATE: Counter: var = " + var_name + ", value = " + str(var_value) + ", op(" + op + "), result = " + str(self.memory.vars[var_name]))
             self.tab_load_mem_vars() # Enter data from variable memory into the variable table
             self.gui.terminal.see(tkinter.END)
     
@@ -1244,25 +1250,25 @@ class Eva_Sim:
                 self.EVA_ROBOT_STATE = "BUSY"
                 self.ledAnimation("RAINBOW")
                 if node.get("language") == None:
-                    self.client.publish(self.topic_base + "/textEmotion", config.LANG_DEFAULT_GOOGLE_TRANSLATING + "|" + eva_memory.var_dolar[-1][0])
+                    self.client.publish(self.topic_base + "/textEmotion", config.LANG_DEFAULT_GOOGLE_TRANSLATING + "|" + self.memory.var_dolar[-1][0])
                 else:
-                    self.client.publish(self.topic_base + "/textEmotion", node.attrib["language"] + "|" + eva_memory.var_dolar[-1][0])
+                    self.client.publish(self.topic_base + "/textEmotion", node.attrib["language"] + "|" + self.memory.var_dolar[-1][0])
                     
     
                 while (self.EVA_ROBOT_STATE != "FREE"):
                     pass
                 
                 if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    eva_memory.var_dolar.append([self.EVA_DOLLAR, "<textEmotion>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion: var=$" + ", value = " + eva_memory.var_dolar[-1][0])
+                    self.memory.var_dolar.append([self.EVA_DOLLAR, "<textEmotion>"])
+                    self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion: var=$" + ", value = " + self.memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
                     self.ledAnimation("STOP")
                 else:
                     var_name = node.attrib["var"]
-                    eva_memory.vars[var_name] = self.EVA_DOLLAR
-                    print("Eva ram => ", eva_memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
+                    self.memory.vars[var_name] = self.EVA_DOLLAR
+                    print("Eva ram => ", self.memory.vars)
+                    self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
                     self.tab_load_mem_vars() # Enter data from variable memory into the var table
                     self.gui.terminal.see(tkinter.END)
                     print("textEmotion command USING VAR...")
@@ -1275,15 +1281,15 @@ class Eva_Sim:
                 def fechar_pop(): # Pop up window closing function
                     print(var.get())
                     if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                        eva_memory.var_dolar.append([var.get(), "<textEmotion>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion: var = $" + ", value = " + eva_memory.var_dolar[-1][0])
+                        self.memory.var_dolar.append([var.get(), "<textEmotion>"])
+                        self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                         self.tab_load_mem_dollar()
                         self.gui.terminal.see(tkinter.END)
                     else:
                         var_name = node.attrib["var"]
-                        eva_memory.vars[var_name] = var.get()
-                        print("Eva ram => ", eva_memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
+                        self.memory.vars[var_name] = var.get()
+                        print("Eva ram => ", self.memory.vars)
+                        self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
                         self.tab_load_mem_vars() # Enter data from variable memory into the var table
                         self.gui.terminal.see(tkinter.END)
                         print("textEmotion command USING VAR...")
@@ -1347,14 +1353,14 @@ class Eva_Sim:
                 var = StringVar(value=result_pose)
     
                 if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                    eva_memory.var_dolar.append([var.get(), "<userHandPose>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : var=$" + ", value=" + eva_memory.var_dolar[-1][0])
+                    self.memory.var_dolar.append([var.get(), "<userHandPose>"])
+                    self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : var=$" + ", value=" + self.memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
                 else:
                     var_name = node.attrib["var"]
-                    eva_memory.vars[var_name] = var.get()
-                    print("Eva ram => ", eva_memory.vars)
+                    self.memory.vars[var_name] = var.get()
+                    print("Eva ram => ", self.memory.vars)
                     self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                     self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                     self.gui.terminal.see(tkinter.END)
@@ -1366,14 +1372,14 @@ class Eva_Sim:
                 def fechar_pop(): # função de fechamento da janela pop up
                         print(var.get())
                         if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                            eva_memory.var_dolar.append([var.get(), "<userHandPose>"])
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : var=$" + ", value=" + eva_memory.var_dolar[-1][0])
+                            self.memory.var_dolar.append([var.get(), "<userHandPose>"])
+                            self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : var=$" + ", value=" + self.memory.var_dolar[-1][0])
                             self.tab_load_mem_dollar()
                             self.gui.terminal.see(tkinter.END)
                         else:
                             var_name = node.attrib["var"]
-                            eva_memory.vars[var_name] = var.get()
-                            print("Eva ram => ", eva_memory.vars)
+                            self.memory.vars[var_name] = var.get()
+                            print("Eva ram => ", self.memory.vars)
                             self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                             self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                             self.gui.terminal.see(tkinter.END)
@@ -1433,16 +1439,16 @@ class Eva_Sim:
                     pass
                 
                 if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    eva_memory.var_dolar.append([self.EVA_DOLLAR, "<listen>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion: var=$" + ", value = " + eva_memory.var_dolar[-1][0])
+                    self.memory.var_dolar.append([self.EVA_DOLLAR, "<listen>"])
+                    self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion: var=$" + ", value = " + self.memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
                     self.ledAnimation("STOP")
                 else:
                     var_name = node.attrib["var"]
-                    eva_memory.vars[var_name] = self.EVA_DOLLAR
-                    print("Eva ram => ", eva_memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
+                    self.memory.vars[var_name] = self.EVA_DOLLAR
+                    print("Eva ram => ", self.memory.vars)
+                    self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
                     self.tab_load_mem_vars() # Enter data from variable memory into the variable table
                     self.gui.terminal.see(tkinter.END)
                     print("userEmotion command USING VAR...")
@@ -1458,14 +1464,14 @@ class Eva_Sim:
     
                     var = StringVar(value=result_emotion)
                     if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                        eva_memory.var_dolar.append([var.get(), "<userEmotion>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : var=$" + ", value=" + eva_memory.var_dolar[-1][0])
+                        self.memory.var_dolar.append([var.get(), "<userEmotion>"])
+                        self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : var=$" + ", value=" + self.memory.var_dolar[-1][0])
                         self.tab_load_mem_dollar()
                         self.gui.terminal.see(tkinter.END)
                     else:
                         var_name = node.attrib["var"]
-                        eva_memory.vars[var_name] = var.get()
-                        print("Eva ram => ", eva_memory.vars)
+                        self.memory.vars[var_name] = var.get()
+                        print("Eva ram => ", self.memory.vars)
                         self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                         self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                         self.gui.terminal.see(tkinter.END)
@@ -1474,14 +1480,14 @@ class Eva_Sim:
                     def fechar_pop(): # função de fechamento da janela pop up
                         print(var.get())
                         if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                            eva_memory.var_dolar.append([var.get(), "<userEmotion>"])
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : var=$" + ", value=" + eva_memory.var_dolar[-1][0])
+                            self.memory.var_dolar.append([var.get(), "<userEmotion>"])
+                            self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : var=$" + ", value=" + self.memory.var_dolar[-1][0])
                             self.tab_load_mem_dollar()
                             self.gui.terminal.see(tkinter.END)
                         else:
                             var_name = node.attrib["var"]
-                            eva_memory.vars[var_name] = var.get()
-                            print("Eva ram => ", eva_memory.vars)
+                            self.memory.vars[var_name] = var.get()
+                            print("Eva ram => ", self.memory.vars)
                             self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                             self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                             self.gui.terminal.see(tkinter.END)
@@ -1546,16 +1552,16 @@ class Eva_Sim:
                 
                 
                 if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    eva_memory.var_dolar.append([self.EVA_DOLLAR, "<qrRead>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + eva_memory.var_dolar[-1][0])
+                    self.memory.var_dolar.append([self.EVA_DOLLAR, "<qrRead>"])
+                    self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
                     self.ledAnimation("STOP")
                 else:
                     var_name = node.attrib["var"]
-                    eva_memory.vars[var_name] = self.EVA_DOLLAR
-                    print("Eva ram => ", eva_memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
+                    self.memory.vars[var_name] = self.EVA_DOLLAR
+                    print("Eva ram => ", self.memory.vars)
+                    self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
                     self.tab_load_mem_vars() # Enter data from variable memory into the var table
                     self.gui.terminal.see(tkinter.END)
                     print("qrRead command USING VAR...")
@@ -1572,14 +1578,14 @@ class Eva_Sim:
                     var = StringVar(value=result_qr)
     
                     if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                        eva_memory.var_dolar.append([var.get(), "<qrRead>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: qrRead : var=$" + ", value=" + eva_memory.var_dolar[-1][0])
+                        self.memory.var_dolar.append([var.get(), "<qrRead>"])
+                        self.gui.terminal.insert(INSERT, "\nSTATE: qrRead : var=$" + ", value=" + self.memory.var_dolar[-1][0])
                         self.tab_load_mem_dollar()
                         self.gui.terminal.see(tkinter.END)
                     else:
                         var_name = node.attrib["var"]
-                        eva_memory.vars[var_name] = var.get()
-                        print("Eva ram => ", eva_memory.vars)
+                        self.memory.vars[var_name] = var.get()
+                        print("Eva ram => ", self.memory.vars)
                         self.gui.terminal.insert(INSERT, "\nSTATE: qrRead : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                         self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                         self.gui.terminal.see(tkinter.END)
@@ -1590,17 +1596,17 @@ class Eva_Sim:
                     def fechar_pop_ret(s): 
                         print(var.get())
                         if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                            eva_memory.var_dolar.append([var.get(), "<qrRead>"])
-                            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + eva_memory.var_dolar[-1][0])
+                            self.memory.var_dolar.append([var.get(), "<qrRead>"])
+                            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                             self.tab_load_mem_dollar()
                             self.gui.terminal.see(tkinter.END)
                             pop.destroy()
                             self.unlock_thread_pop() # Reactivate the script processing thread
                         else:
                             var_name = node.attrib["var"]
-                            eva_memory.vars[var_name] = var.get()
-                            print("Eva ram => ", eva_memory.vars)
-                            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
+                            self.memory.vars[var_name] = var.get()
+                            print("Eva ram => ", self.memory.vars)
+                            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
                             self.tab_load_mem_vars() # Enter data from variable memory into the var table
                             self.gui.terminal.see(tkinter.END)
                             print("qrRead command USING VAR...")
@@ -1611,17 +1617,17 @@ class Eva_Sim:
                     def fechar_pop_bt(): 
                         print(var.get())
                         if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                            eva_memory.var_dolar.append([var.get(), "<qrRead>"])
-                            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + eva_memory.var_dolar[-1][0])
+                            self.memory.var_dolar.append([var.get(), "<qrRead>"])
+                            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                             self.tab_load_mem_dollar()
                             self.gui.terminal.see(tkinter.END)
                             pop.destroy()
                             self.unlock_thread_pop() # Reactivate the script processing thread
                         else:
                             var_name = node.attrib["var"]
-                            eva_memory.vars[var_name] = var.get()
-                            print("Eva ram => ", eva_memory.vars)
-                            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
+                            self.memory.vars[var_name] = var.get()
+                            print("Eva ram => ", self.memory.vars)
+                            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
                             self.tab_load_mem_vars() # Enter data from variable memory into the var table
                             self.gui.terminal.see(tkinter.END)
                             print("qrRead command USING VAR...")
@@ -1666,16 +1672,16 @@ class Eva_Sim:
                     pass
                 
                 if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    eva_memory.var_dolar.append([self.EVA_DOLLAR, "<userID>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + eva_memory.var_dolar[-1][0])
+                    self.memory.var_dolar.append([self.EVA_DOLLAR, "<userID>"])
+                    self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
     
                 else:
                     var_name = node.attrib["var"]
-                    eva_memory.vars[var_name] = self.EVA_DOLLAR
-                    print("Eva ram => ", eva_memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
+                    self.memory.vars[var_name] = self.EVA_DOLLAR
+                    print("Eva ram => ", self.memory.vars)
+                    self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
                     self.tab_load_mem_vars() # Enter data from variable memory into the var table
                     self.gui.terminal.see(tkinter.END)
                     print("userID command USING VAR...")
@@ -1693,15 +1699,15 @@ class Eva_Sim:
                     var = StringVar(value=result_recognition)
     
                     if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                        eva_memory.var_dolar.append([var.get(), "<userID>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userID : var=$" + ", value=" + eva_memory.var_dolar[-1][0])
+                        self.memory.var_dolar.append([var.get(), "<userID>"])
+                        self.gui.terminal.insert(INSERT, "\nSTATE: userID : var=$" + ", value=" + self.memory.var_dolar[-1][0])
                         self.tab_load_mem_dollar()
                         self.gui.terminal.see(tkinter.END)
                     
                     else:
                         var_name = node.attrib["var"]
-                        eva_memory.vars[var_name] = var.get()
-                        print("Eva ram => ", eva_memory.vars)
+                        self.memory.vars[var_name] = var.get()
+                        print("Eva ram => ", self.memory.vars)
                         self.gui.terminal.insert(INSERT, "\nSTATE: userID : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                         self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                         self.gui.terminal.see(tkinter.END)
@@ -1711,17 +1717,17 @@ class Eva_Sim:
                     def fechar_pop_ret(s): 
                         print(var.get())
                         if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                            eva_memory.var_dolar.append([var.get(), "<userID>"])
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + eva_memory.var_dolar[-1][0])
+                            self.memory.var_dolar.append([var.get(), "<userID>"])
+                            self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                             self.tab_load_mem_dollar()
                             self.gui.terminal.see(tkinter.END)
                             pop.destroy()
                             self.unlock_thread_pop() # Reactivate the script processing thread
                         else:
                             var_name = node.attrib["var"]
-                            eva_memory.vars[var_name] = var.get()
-                            print("Eva ram => ", eva_memory.vars)
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userID reading (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
+                            self.memory.vars[var_name] = var.get()
+                            print("Eva ram => ", self.memory.vars)
+                            self.gui.terminal.insert(INSERT, "\nSTATE: userID reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
                             self.tab_load_mem_vars() # Enter data from variable memory into the var table
                             self.gui.terminal.see(tkinter.END)
                             print("userID command USING VAR...")
@@ -1732,17 +1738,17 @@ class Eva_Sim:
                     def fechar_pop_bt(): 
                         print(var.get())
                         if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                            eva_memory.var_dolar.append([var.get(), "<userID>"])
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + eva_memory.var_dolar[-1][0])
+                            self.memory.var_dolar.append([var.get(), "<userID>"])
+                            self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                             self.tab_load_mem_dollar()
                             self.gui.terminal.see(tkinter.END)
                             pop.destroy()
                             self.unlock_thread_pop() # Reactivate the script processing thread
                         else:
                             var_name = node.attrib["var"]
-                            eva_memory.vars[var_name] = var.get()
-                            print("Eva ram => ", eva_memory.vars)
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
+                            self.memory.vars[var_name] = var.get()
+                            print("Eva ram => ", self.memory.vars)
+                            self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
                             self.tab_load_mem_vars() # Enter data from variable memory into the var table
                             self.gui.terminal.see(tkinter.END)
                             print("userID command USING VAR...")
@@ -1824,7 +1830,7 @@ class Eva_Sim:
 
 
             if (comando_from == "case") or (comando_from == "default"): # If the command executed was a case or a default
-                if eva_memory.reg_case == 1: # Check the flag to see if the "case" was true
+                if self.memory.reg_case == 1: # Check the flag to see if the "case" was true
                     self.fila_links = [] # Empty the queue, as the flow will continue from this "case" onwards
                     print("Jumping the command = ", comando_from)
                     # Follows the flow of the success "case" looking for the "prox. link"
@@ -1855,4 +1861,5 @@ class Eva_Sim:
         self.gui.bt_stop['state'] = DISABLED
         self.gui.bt_stop.unbind("<Button1>")
 
-e = Eva_Sim()
+if __name__ == "__main__":
+    e = EvaSim()
