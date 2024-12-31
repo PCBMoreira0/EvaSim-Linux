@@ -23,7 +23,7 @@ import tkinter
 
 
 # Adapter module for the audio library
-# Depending on the OS it matters and defines a function called "playsound"
+# Depending on the OS it matters and defines a function called "self.playsound"
 from play_audio import playsound
 
 import time
@@ -51,6 +51,7 @@ ROBOT_MODE_ENABLED = False #
 
 class Eva_Sim:
     def __init__(self):
+        global TTS_IBM_WATSON, ROBOT_MODE_ENABLED
         if len(sys.argv) > 1: # Verify if is an argument in the command line
             for parameter in sys.argv[1:]: # Sweep all parameters
                 if parameter.lower() == "tts=ibm-watson": # Watson was selected
@@ -87,11 +88,11 @@ class Eva_Sim:
 
         self.broker = config.MQTT_BROKER_ADRESS # broker adress
         self.port = config.MQTT_PORT # broker port
-        self.topic_base = config.EVA_self.topic_base
+        self.topic_base = config.EVA_TOPIC_BASE
 
         self.EVA_ROBOT_STATE = "FREE"
         self.EVA_DOLLAR = ""
-        self.RUNNING_MODE = "SIMULATOR" # EvaSIM operating mode (Physical Robot Simulator or Player)
+        self.RUNNING_MODE = "SIMULATOR" # EvaSIM operating mode (Physical Robot Simulator or self.player)
 
         # Watson library import and api key configuration
         if TTS_IBM_WATSON: # Only if tts=ibm-watson option was selected in command line
@@ -131,18 +132,16 @@ class Eva_Sim:
 
             # The callback for when a PUBLISH message is received from the server.
             def on_message(client, userdata, msg):
-                global EVA_ROBOT_STATE
-                global EVA_DOLLAR
                 if msg.topic == self.topic_base + '/state':
-                    EVA_ROBOT_STATE = "FREE" # msg.payload.decode()
+                    self.EVA_ROBOT_STATE = "FREE" # msg.payload.decode()
                 elif msg.topic == self.topic_base + '/var/dollar':
-                    EVA_DOLLAR = msg.payload.decode()
+                    self.EVA_DOLLAR = msg.payload.decode()
 
-            client = mqtt_client.Client()
-            client.on_connect = on_connect
-            client.on_message = on_message
-            client.connect(self.broker, self.port)
-            client.loop_start()
+            self.client = mqtt_client.Client()
+            self.client.on_connect = on_connect
+            self.client.on_message = on_message
+            self.client.connect(self.broker, self.port)
+            self.client.loop_start()
 
         else: # User not selected the robot-mode=on in commend line
             class Fake_Mqtt_Client(): # Fake mqtt class to work woth mqtt commands
@@ -150,7 +149,7 @@ class Eva_Sim:
                     print("A fake mqtt client was created!")
                 def publish(self, fake_topic, fake_message):
                     print(f"A fake publish method with topic: {fake_topic} and message: {fake_message} is being executed.")
-            client = Fake_Mqtt_Client()
+            self.client = Fake_Mqtt_Client()
 
 
         # VM global variables
@@ -159,8 +158,14 @@ class Eva_Sim:
         self.links_node = {}
         self.fila_links =  [] # Link queue (commands)
         self.thread_pop_pause = False
-        self.play = False # Play status of the script. This variable has an influence on the function. link_process
+        self.play = False # self.play status of the script. This variable has an influence on the function. link_process
         self.script_file = "" # Variable that stores the pointer to the xml script file on disk.
+
+        # Create the Tkinter window
+        self.window = Tk()
+        self.gui = EvaSIM_gui.Gui(self.window) # Instance of the self.gui class within the graphical user interface definition module
+
+        self.font1 = self.gui.font1 # Sse the same font defined in the self.gui module
 
         # EVA expressions images
         self.im_eyes_neutral = PhotoImage(file = "images/eyes_neutral.png")
@@ -183,11 +188,6 @@ class Eva_Sim:
         self.im_bt_play = PhotoImage(file = "images/bt_play.png")
         self.im_bt_stop = PhotoImage(file = "images/bt_stop.png")
 
-        # Create the Tkinter window
-        self.window = Tk()
-        self.gui = EvaSIM_gui.self.gui(self.window) # Instance of the self.gui class within the graphical user interface definition module
-
-        self.font1 = self.gui.font1 # Sse the same font defined in the self.gui module
 
         # Connect callbacks to buttons
         # The use of another module to define the self.gui did not allow callbacks to be associated with buttons at the time of their creation
@@ -266,14 +266,14 @@ class Eva_Sim:
         # TTS buttons binding
         self.gui.bt_send_tts.bind("<Button-1>", self.woz_tts)
 
+        self.gui.mainloop()
+
     # Variable control function that blocks popups
     def lock_thread_pop(self):
-        global thread_pop_pause
-        thread_pop_pause = True
+        self.thread_pop_pause = True
     
     def unlock_thread_pop(self):
-        global thread_pop_pause
-        thread_pop_pause = False
+        self.thread_pop_pause = False
 
 
     # Function to write memory data to the variable table
@@ -322,26 +322,23 @@ class Eva_Sim:
 
 
     # Eva powerOn function
-    def powerOn(self):
+    def powerOn(self, s):
         threading.Thread(target=self.evaInit, args=()).start()
 
 
     # Run in Simulator mode
-    def setSimMode(self):
-        global RUNNING_MODE
-        RUNNING_MODE = "SIMULATOR"
+    def setSimMode(self, s):
+        self.RUNNING_MODE = "SIMULATOR"
         self.runScript()
 
 
-    # Runs in EVA Robot Player mode
-    def setEVAMode(self):
-        global RUNNING_MODE
-        RUNNING_MODE = "EVA_ROBOT"
+    # Runs in EVA Robot self.player mode
+    def setEVAMode(self, s):
+        self.RUNNING_MODE = "EVA_ROBOT"
         self.runScript()
 
     # Activate the thread that runs the script
     def runScript(self):
-        global play, fila_links
         # initialize the robot memory
         print("Intializing the robot memory.")
         eva_memory.var_dolar = []
@@ -352,7 +349,7 @@ class Eva_Sim:
         self.tab_load_mem_dollar()
         self.tab_load_mem_vars()
         # Initializing the memory of simulator
-        fila_links =  []
+        self.fila_links =  []
         # Buttons states
         self.gui.bt_run_sim['state'] = DISABLED
         self.gui.bt_run_sim.unbind("<Button-1>")
@@ -363,14 +360,13 @@ class Eva_Sim:
         self.gui.bt_stop['state'] = NORMAL
         self.gui.bt_stop.bind("<Button-1>", self.stopScript)
         self.gui.bt_import.unbind("<Button-1>")
-        play = True # ativa a var do play do script
-        root.find("settings").find("voice").attrib["key"]
-        busca_links(root.find("settings").find("voice").attrib["key"]) # o primeiro elemento da interação é o voice
-        threading.Thread(target=link_process, args=()).start()
+        self.play = True # ativa a var do self.play do script
+        self.root.find("settings").find("voice").attrib["key"]
+        self.busca_links(self.root.find("settings").find("voice").attrib["key"]) # o primeiro elemento da interação é o voice
+        threading.Thread(target=self.link_process, args=()).start()
 
-    # Activate the script play var
-    def stopScript(self):
-        global play, EVA_ROBOT_STATE
+    # Activate the script self.play var
+    def stopScript(self, s):
         self.gui.bt_run_sim['state'] = NORMAL
         self.gui.bt_run_sim.bind("<Button-1>", self.setSimMode)
         if ROBOT_MODE_ENABLED: self.gui.bt_run_robot['state'] = NORMAL
@@ -380,34 +376,33 @@ class Eva_Sim:
         self.gui.bt_import['state'] = NORMAL
         self.gui.bt_reload['state'] = NORMAL
         self.gui.bt_import.bind("<Button-1>", self.importFileThread)
-        play = False # desativa a var de play do script. Faz com que o script seja interrompido
-        EVA_ROBOT_STATE = "FREE" # libera a execução, caso esteja executando algum comando bloqueante
+        self.play = False # desativa a var de self.play do script. Faz com que o script seja interrompido
+        self.EVA_ROBOT_STATE = "FREE" # libera a execução, caso esteja executando algum comando bloqueante
 
     # Import file thread
-    def importFileThread(self):
+    def importFileThread(self, s):
         threading.Thread(target=self.importFile, args=()).start()
 
     # Eva Import Script function
     def importFile(self):
-        global root, script_node, links_node, script_file
         print("Importing a file.")
         # Now EvaSIM can read json
         filetypes = (('evaML files', '*.xml *.json'), )
-        script_file = fd.askopenfile(mode = "r", title = 'Open an EvaML Script File', initialdir = './', filetypes = filetypes)
+        self.script_file = fd.askopenfile(mode = "r", title = 'Open an EvaML Script File', initialdir = './', filetypes = filetypes)
         # imagine that the guy will read a json or an xml
-        if (re.findall(r'\.(xml|json|JSON|XML)', str(script_file)))[0].lower() == "json": # leitura de json
+        if (re.findall(r'\.(xml|json|JSON|XML)', str(self.script_file)))[0].lower() == "json": # leitura de json
             print("Converting and running a JSON file.")
-            # Script_file is not a string and still has information beyond the file path
+            # self.script_file is not a string and still has information beyond the file path
             # So it needs to be processed before being passed to the conversion module
-            json_to_evaml_conv.converte(str(script_file).split("'")[1], tkinter)
-            script_file = "_json_to_evaml_converted.xml" # Json file converted to XML
+            json_to_evaml_conv.converte(str(self.script_file).split("'")[1], tkinter)
+            self.script_file = "_json_to_evaml_converted.xml" # Json file converted to XML
         else: # Reading an XML
             print("Running a XML file.")
         # VM variables
-        tree = ET.parse(script_file)  # XML code file
-        root = tree.getroot() # EvaML root node
-        script_node = root.find("script")
-        links_node = root.find("links")
+        tree = ET.parse(self.script_file)  # XML code file
+        self.root = tree.getroot() # EvaML root node
+        self.script_node = self.root.find("script")
+        self.links_node = self.root.find("links")
         self.gui.bt_run_sim['state'] = NORMAL
         self.gui.bt_run_sim.bind("<Button-1>", self.setSimMode)
         if ROBOT_MODE_ENABLED: self.gui.bt_run_robot['state'] = NORMAL
@@ -415,25 +410,24 @@ class Eva_Sim:
         self.gui.bt_stop['state'] = DISABLED
         self.gui.bt_reload['state'] = NORMAL
         self.evaEmotion("NEUTRAL")
-        only_file_name = str(script_file).split("/")[-1].split("'")[0]
+        only_file_name = str(self.script_file).split("/")[-1].split("'")[0]
         self.window.title("Eva Simulator for EvaML - Version 2.0 - UFF / MidiaCom / CICESE -- [ " + only_file_name + " ]")
         self.gui.terminal.insert(INSERT, '\nSTATE: Script => ' + only_file_name + ' was LOADED.')
         self.gui.terminal.see(tkinter.END)
 
-    def reloadFile(self):
-        global root, script_node, links_node, script_file
-        script_file.seek(0) # Places the file object pointer at the beginning
-        tree = ET.parse(script_file) # # XML code file
-        root = tree.getroot() # EvaML root node
-        script_node = root.find("script")
-        links_node = root.find("links")
+    def reloadFile(self, s):
+        self.script_file.seek(0) # Places the file object pointer at the beginning
+        tree = ET.parse(self.script_file) # # XML code file
+        self.root = tree.getroot() # EvaML root node
+        self.script_node = self.root.find("script")
+        self.links_node = self.root.find("links")
         self.evaEmotion("NEUTRAL")
-        only_file_name = str(script_file).split("/")[-1].split("'")[0]
+        only_file_name = str(self.script_file).split("/")[-1].split("'")[0]
         self.gui.terminal.insert(INSERT, '\nSTATE: Script => ' + only_file_name + ' was RELOADED.')
         self.gui.terminal.see(tkinter.END)
 
 
-    def clear_terminal(self):
+    def clear_terminal(self, s):
         self.gui.terminal.delete('1.0', END)
         # Creating terminal text
         self.gui.terminal.insert(INSERT, "=============================================================================================================\n")
@@ -444,152 +438,152 @@ class Eva_Sim:
 
 
     # WoZ light functions
-    def woz_light_blue(self):
+    def woz_light_blue(self, s):
         self.client.publish(self.topic_base + "/light", "BLUE|ON")
-    def woz_light_green(self):
+    def woz_light_green(self, s):
         self.client.publish(self.topic_base + "/light", "GREEN|ON")
-    def woz_light_black(self):
+    def woz_light_black(self, s):
         self.client.publish(self.topic_base + "/light", "BLACK|OFF")
-    def woz_light_pink(self):
+    def woz_light_pink(self, s):
         self.client.publish(self.topic_base + "/light", "PINK|ON")
-    def woz_light_red(self):
+    def woz_light_red(self, s):
         self.client.publish(self.topic_base + "/light", "RED|ON")
-    def woz_light_yellow(self):
+    def woz_light_yellow(self, s):
         self.client.publish(self.topic_base + "/light", "YELLOW|ON")
-    def woz_light_white(self):
+    def woz_light_white(self, s):
         self.client.publish(self.topic_base + "/light", "WHITE|ON")
 
 
 
     # WoZ expressions functions
-    def woz_expression_angry(self):
-        client.publish(self.topic_base + "/evaEmotion", "ANGRY")
-    def woz_expression_fear(self):
-        client.publish(self.topic_base + "/evaEmotion", "FEAR")
-    def woz_expression_happy(self):
-        client.publish(self.topic_base + "/evaEmotion", "HAPPY")
-    def woz_expression_neutral(self):
-        client.publish(self.topic_base + "/evaEmotion", "NEUTRAL")
-    def woz_expression_sad(self):
-        client.publish(self.topic_base + "/evaEmotion", "SAD")
-    def woz_expression_surprise(self):
-        client.publish(self.topic_base + "/evaEmotion", "SURPRISE")
-    def woz_expression_disgust(self):
-        client.publish(self.topic_base + "/evaEmotion", "DISGUST")
-    def woz_expression_inlove(self):
-        client.publish(self.topic_base + "/evaEmotion", "INLOVE")
+    def woz_expression_angry(self, s):
+        self.client.publish(self.topic_base + "/evaEmotion", "ANGRY")
+    def woz_expression_fear(self, s):
+        self.client.publish(self.topic_base + "/evaEmotion", "FEAR")
+    def woz_expression_happy(self, s):
+        self.client.publish(self.topic_base + "/evaEmotion", "HAPPY")
+    def woz_expression_neutral(self, s):
+        self.client.publish(self.topic_base + "/evaEmotion", "NEUTRAL")
+    def woz_expression_sad(self, s):
+        self.client.publish(self.topic_base + "/evaEmotion", "SAD")
+    def woz_expression_surprise(self, s):
+        self.client.publish(self.topic_base + "/evaEmotion", "SURPRISE")
+    def woz_expression_disgust(self, s):
+        self.client.publish(self.topic_base + "/evaEmotion", "DISGUST")
+    def woz_expression_inlove(self, s):
+        self.client.publish(self.topic_base + "/evaEmotion", "INLOVE")
 
 
     # WoZ led functions
-    def woz_led_stop(self):
-        client.publish(self.topic_base + '/log', "Leds Animation: " + "STOP") 
-        client.publish(self.topic_base + "/leds", "STOP")
+    def woz_led_stop(self, s):
+        self.client.publish(self.topic_base + '/log', "Leds Animation: " + "STOP") 
+        self.client.publish(self.topic_base + "/leds", "STOP")
     def woz_led_angry(self):
-        client.publish(self.topic_base + "/leds", "STOP")
-        client.publish(self.topic_base + "/leds", "ANGRY")
-    def woz_led_sad(self):
-        client.publish(self.topic_base + "/leds", "STOP")
-        client.publish(self.topic_base + "/leds", "SAD")
-    def woz_led_angry2(self):
-        client.publish(self.topic_base + "/leds", "STOP")
-        client.publish(self.topic_base + "/leds", "ANGRY2")
-    def woz_led_happy(self):
-        client.publish(self.topic_base + "/leds", "STOP")
-        client.publish(self.topic_base + "/leds", "HAPPY")
-    def woz_led_listen(self):
-        client.publish(self.topic_base + "/leds", "STOP")
-        client.publish(self.topic_base + "/leds", "LISTEN")
-    def woz_led_rainbow(self):
-        client.publish(self.topic_base + "/leds", "STOP")
-        client.publish(self.topic_base + "/leds", "RAINBOW")
-    def woz_led_speak(self):
-        client.publish(self.topic_base + "/leds", "STOP")
-        client.publish(self.topic_base + "/leds", "SPEAK")
-    def woz_led_surprise(self):
-        client.publish(self.topic_base + "/leds", "STOP")
-        client.publish(self.topic_base + "/leds", "SURPRISE")
-    def woz_led_white(self):
-        client.publish(self.topic_base + "/leds", "STOP")
-        client.publish(self.topic_base + "/leds", "WHITE")
+        self.client.publish(self.topic_base + "/leds", "STOP")
+        self.client.publish(self.topic_base + "/leds", "ANGRY")
+    def woz_led_sad(self, s):
+        self.client.publish(self.topic_base + "/leds", "STOP")
+        self.client.publish(self.topic_base + "/leds", "SAD")
+    def woz_led_angry2(self, s):
+        self.client.publish(self.topic_base + "/leds", "STOP")
+        self.client.publish(self.topic_base + "/leds", "ANGRY2")
+    def woz_led_happy(self, s):
+        self.client.publish(self.topic_base + "/leds", "STOP")
+        self.client.publish(self.topic_base + "/leds", "HAPPY")
+    def woz_led_listen(self, s):
+        self.client.publish(self.topic_base + "/leds", "STOP")
+        self.client.publish(self.topic_base + "/leds", "LISTEN")
+    def woz_led_rainbow(self, s):
+        self.client.publish(self.topic_base + "/leds", "STOP")
+        self.client.publish(self.topic_base + "/leds", "RAINBOW")
+    def woz_led_speak(self, s):
+        self.client.publish(self.topic_base + "/leds", "STOP")
+        self.client.publish(self.topic_base + "/leds", "SPEAK")
+    def woz_led_surprise(self, s):
+        self.client.publish(self.topic_base + "/leds", "STOP")
+        self.client.publish(self.topic_base + "/leds", "SURPRISE")
+    def woz_led_white(self, s):
+        self.client.publish(self.topic_base + "/leds", "STOP")
+        self.client.publish(self.topic_base + "/leds", "WHITE")
 
 
     # WoZ head motion functions
-    def woz_head_motion_yes(self):
-        client.publish(self.topic_base + "/motion/head", "2YES")
-    def woz_head_motion_no(self):
-        client.publish(self.topic_base + "/motion/head", "2NO")
-    def woz_head_motion_center(self):
-        client.publish(self.topic_base + "/motion/head", "CENTER")
-    def woz_head_motion_left(self):
-        client.publish(self.topic_base + "/motion/head", "LEFT")
-    def woz_head_motion_right(self):
-        client.publish(self.topic_base + "/motion/head", "RIGHT")
-    def woz_head_motion_up(self):
-        client.publish(self.topic_base + "/motion/head", "UP")
-    def woz_head_motion_down(self):
-        client.publish(self.topic_base + "/motion/head", "DOWN")
-    def woz_head_motion_2left(self):
-        client.publish(self.topic_base + "/motion/head", "2LEFT")
-    def woz_head_motion_2right(self):
-        client.publish(self.topic_base + "/motion/head", "2RIGHT")
-    def woz_head_motion_2up(self):
-        client.publish(self.topic_base + "/motion/head", "2UP")
-    def woz_head_motion_2down(self):
-        client.publish(self.topic_base + "/motion/head", "2DOWN")
-    def woz_head_motion_up_left(self):
-        client.publish(self.topic_base + "/motion/head", "UP_LEFT")
-    def woz_head_motion_up_right(self):
-        client.publish(self.topic_base + "/motion/head", "UP_RIGHT")
-    def woz_head_motion_down_left(self):
-        client.publish(self.topic_base + "/motion/head", "DOWN_LEFT")
-    def woz_head_motion_down_right(self):
-        client.publish(self.topic_base + "/motion/head", "DOWN_RIGHT")
+    def woz_head_motion_yes(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "2YES")
+    def woz_head_motion_no(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "2NO")
+    def woz_head_motion_center(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "CENTER")
+    def woz_head_motion_left(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "LEFT")
+    def woz_head_motion_right(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "RIGHT")
+    def woz_head_motion_up(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "UP")
+    def woz_head_motion_down(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "DOWN")
+    def woz_head_motion_2left(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "2LEFT")
+    def woz_head_motion_2right(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "2RIGHT")
+    def woz_head_motion_2up(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "2UP")
+    def woz_head_motion_2down(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "2DOWN")
+    def woz_head_motion_up_left(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "UP_LEFT")
+    def woz_head_motion_up_right(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "UP_RIGHT")
+    def woz_head_motion_down_left(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "DOWN_LEFT")
+    def woz_head_motion_down_right(self, s):
+        self.client.publish(self.topic_base + "/motion/head", "DOWN_RIGHT")
 
     # WoZ arms motion functions
-    def woz_arm_left_motion_up(self):
-        client.publish(self.topic_base + "/motion/arm/left", "UP")
-    def woz_arm_right_motion_up(self):
-        client.publish(self.topic_base + "/motion/arm/right", "UP")
-    def woz_arm_left_motion_down(self):
-        client.publish(self.topic_base + "/motion/arm/left", "DOWN")
-    def woz_arm_right_motion_down(self):
-        client.publish(self.topic_base + "/motion/arm/right", "DOWN")
-    def woz_arm_left_motion_pos_0(self):
-        client.publish(self.topic_base + "/motion/arm/left", "POSITION 0")
-    def woz_arm_right_motion_pos_0(self):
-        client.publish(self.topic_base + "/motion/arm/right", "POSITION 0")
-    def woz_arm_left_motion_pos_1(self):
-        client.publish(self.topic_base + "/motion/arm/left", "POSITION 1")
-    def woz_arm_right_motion_pos_1(self):
-        client.publish(self.topic_base + "/motion/arm/right", "POSITION 1")
-    def woz_arm_left_motion_pos_2(self):
-        client.publish(self.topic_base + "/motion/arm/left", "POSITION 2")
-    def woz_arm_right_motion_pos_2(self):
-        client.publish(self.topic_base + "/motion/arm/right", "POSITION 2")
-    def woz_arm_left_motion_pos_3(self):
-        client.publish(self.topic_base + "/motion/arm/left", "POSITION 3")
-    def woz_arm_right_motion_pos_3(self):
-        client.publish(self.topic_base + "/motion/arm/right", "POSITION 3")
-    def woz_arm_left_motion_shake(self):
-        client.publish(self.topic_base + "/motion/arm/left", "SHAKE2")
-    def woz_arm_right_motion_shake(self):
-        client.publish(self.topic_base + "/motion/arm/right", "SHAKE2")
+    def woz_arm_left_motion_up(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/left", "UP")
+    def woz_arm_right_motion_up(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/right", "UP")
+    def woz_arm_left_motion_down(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/left", "DOWN")
+    def woz_arm_right_motion_down(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/right", "DOWN")
+    def woz_arm_left_motion_pos_0(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/left", "POSITION 0")
+    def woz_arm_right_motion_pos_0(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/right", "POSITION 0")
+    def woz_arm_left_motion_pos_1(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/left", "POSITION 1")
+    def woz_arm_right_motion_pos_1(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/right", "POSITION 1")
+    def woz_arm_left_motion_pos_2(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/left", "POSITION 2")
+    def woz_arm_right_motion_pos_2(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/right", "POSITION 2")
+    def woz_arm_left_motion_pos_3(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/left", "POSITION 3")
+    def woz_arm_right_motion_pos_3(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/right", "POSITION 3")
+    def woz_arm_left_motion_shake(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/left", "SHAKE2")
+    def woz_arm_right_motion_shake(self, s):
+        self.client.publish(self.topic_base + "/motion/arm/right", "SHAKE2")
 
 
     # TTS function
-    def woz_tts(self):
-        client.publish(self.topic_base + "/log", "EVA will try to speak a text: " + self.gui.msg_tts_text.get('1.0','end').strip())
+    def woz_tts(self, s):
+        self.client.publish(self.topic_base + "/log", "EVA will try to speak a text: " + self.gui.msg_tts_text.get('1.0','end').strip())
         voice_option = self.gui.Lb_voices.get(ANCHOR)
         print(voice_option + "|" + self.gui.msg_tts_text.get('1.0','end').strip())
-        client.publish(self.topic_base + "/talk", voice_option + "|" + self.gui.msg_tts_text.get('1.0','end'))
+        self.client.publish(self.topic_base + "/talk", voice_option + "|" + self.gui.msg_tts_text.get('1.0','end'))
 
 
 
     # Led "animations"
     def ledAnimation(self, animation):
-        if RUNNING_MODE == "EVA_ROBOT":
-            client.publish(self.topic_base + "/leds", "STOP")
-            client.publish(self.topic_base + "/leds", animation)
+        if self.RUNNING_MODE == "EVA_ROBOT":
+            self.client.publish(self.topic_base + "/leds", "STOP")
+            self.client.publish(self.topic_base + "/leds", animation)
         if animation == "STOP":
             self.evaMatrix("grey")
         elif animation == "LISTEN":
@@ -634,7 +628,7 @@ class Eva_Sim:
             self.gui.canvas.create_image(156, 161, image = self.im_eyes_on)
         else: 
             print("A wrong expression was selected.")
-        if RUNNING_MODE == "SIMULATOR":
+        if self.RUNNING_MODE == "SIMULATOR":
             time.sleep(1) # apenas um tempo simbólico para o simulador
 
 
@@ -672,14 +666,13 @@ class Eva_Sim:
     # Virtual machine functions
     # Execute the commands
     def exec_comando(self, node):
-        global EVA_ROBOT_STATE
         global img_neutral, img_happy, img_angry, img_sad, img_surprise
         if node.tag == "voice":
             self.gui.terminal.insert(INSERT, "\nSTATE: Selected Voice => " + node.attrib["tone"])
             self.gui.terminal.see(tkinter.END)
             self.gui.terminal.insert(INSERT, "\nTIP: If the <talk> command doesn't speak some text, try emptying the audio_cache_files folder", "tip")
-            if RUNNING_MODE == "EVA_ROBOT":
-                client.publish(self.topic_base + "/log", "Using the voice: " + node.attrib["tone"]) # 
+            if self.RUNNING_MODE == "EVA_ROBOT":
+                self.client.publish(self.topic_base + "/log", "Using the voice: " + node.attrib["tone"]) # 
     
     
         if node.tag == "motion": # Movement of the head and arms
@@ -697,17 +690,17 @@ class Eva_Sim:
                     self.gui.terminal.insert(INSERT, "\nSTATE: Moving the head! Movement type => " + node.attrib["type"], "motion")
                     self.gui.terminal.see(tkinter.END)
             print("Moving the head and/or the arms.")
-            if RUNNING_MODE == "EVA_ROBOT":
+            if self.RUNNING_MODE == "EVA_ROBOT":
                 if node.get("left-arm") != None: # Move the left arm
-                    client.publish(self.topic_base + "/motion/arm/left", node.attrib["left-arm"]); # comando para o robô físico
+                    self.client.publish(self.topic_base + "/motion/arm/left", node.attrib["left-arm"]); # comando para o robô físico
                 if node.get("right-arm") != None:  # Move the right arm
-                    client.publish(self.topic_base + "/motion/arm/right", node.attrib["right-arm"]); # comando para o robô físico
+                    self.client.publish(self.topic_base + "/motion/arm/right", node.attrib["right-arm"]); # comando para o robô físico
                 if node.get("head") != None: # Move head with the new format (<head> element)
-                        client.publish(self.topic_base + "/motion/head", node.attrib["head"]); # Command for the physical robot
+                        self.client.publish(self.topic_base + "/motion/head", node.attrib["head"]); # Command for the physical robot
                         time.sleep(0.2) # This pause is necessary for arm commands to be received via the serial port
                 else: # Check if the old version was used
                     if node.get("type") != None: # Maintaining compatibility with the old version of the motion element    
-                        client.publish(self.topic_base + "/motion/head", node.attrib["type"]); # Command for the physical robot
+                        self.client.publish(self.topic_base + "/motion/head", node.attrib["type"]); # Command for the physical robot
                         time.sleep(0.2) # This pause is necessary for arm commands to be received via the serial port
             else:
                 time.sleep(0.1) # A symbolic time. In the robot, the movement does not block the script and takes different times
@@ -717,8 +710,8 @@ class Eva_Sim:
             lightEffect = "ON"
             state = node.attrib["state"]
             # Process light Effects settings
-            if root.find("settings").find("lightEffects") != None:
-                if root.find("settings").find("lightEffects").attrib["mode"] == "OFF":
+            if self.root.find("settings").find("lightEffects") != None:
+                if self.root.find("settings").find("lightEffects").attrib["mode"] == "OFF":
                     lightEffect = "OFF"
             
             # Following case, if the state is off, and may not have a color attribute defined
@@ -741,8 +734,8 @@ class Eva_Sim:
                 self.gui.terminal.see(tkinter.END) # Autoscrolling
             self.light(color , state)
     
-            if RUNNING_MODE == "EVA_ROBOT":
-                client.publish(self.topic_base + "/light", color + "|" + state); # Command for the physical robot
+            if self.RUNNING_MODE == "EVA_ROBOT":
+                self.client.publish(self.topic_base + "/light", color + "|" + state); # Command for the physical robot
             else:
                 time.sleep(0.1) # Emulates real bulb response time
     
@@ -769,7 +762,7 @@ class Eva_Sim:
                 self.gui.terminal.see(tkinter.END)
                 exit(1)
             else:
-                client.publish(mqtt_topic, mqtt_message)
+                self.client.publish(mqtt_topic, mqtt_message)
                 print("Publishing a MQTT message to an external device.", mqtt_topic, mqtt_message)
                 self.gui.terminal.insert(INSERT, "\nSTATE: MQTT publishing. Topic = " + mqtt_topic + " and Message = " + mqtt_message + ".")
                 self.gui.terminal.see(tkinter.END)
@@ -807,17 +800,17 @@ class Eva_Sim:
             else:
                 language_for_listen =  node.attrib["language"]
     
-            if RUNNING_MODE == "EVA_ROBOT": 
-                client.publish(self.topic_base + "/log", "EVA is listening...")
-                EVA_ROBOT_STATE = "BUSY"
+            if self.RUNNING_MODE == "EVA_ROBOT": 
+                self.client.publish(self.topic_base + "/log", "EVA is listening...")
+                self.EVA_ROBOT_STATE = "BUSY"
                 self.ledAnimation("LISTEN")
-                client.publish(self.topic_base + "/listen", language_for_listen)
+                self.client.publish(self.topic_base + "/listen", language_for_listen)
     
-                while (EVA_ROBOT_STATE != "FREE"):
+                while (self.EVA_ROBOT_STATE != "FREE"):
                     pass
                 
                 if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    eva_memory.var_dolar.append([EVA_DOLLAR, "<listen>"])
+                    eva_memory.var_dolar.append([self.EVA_DOLLAR, "<listen>"])
                     self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): var = $" + ", value = " + eva_memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
@@ -825,9 +818,9 @@ class Eva_Sim:
                     
                 else:
                     var_name = node.attrib["var"]
-                    eva_memory.vars[var_name] = EVA_DOLLAR
+                    eva_memory.vars[var_name] = self.EVA_DOLLAR
                     print("Eva ram => ", eva_memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): (using the user variable '" + var_name + "'): " + EVA_DOLLAR)
+                    self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                     self.tab_load_mem_vars() # Enter data from variable memory into the var table
                     self.gui.terminal.see(tkinter.END)
                     print("Listen command USING VAR...")
@@ -837,7 +830,7 @@ class Eva_Sim:
                 self.lock_thread_pop()
                 self.ledAnimation("LISTEN")
                 # Pop up window closing function for the <return> key)
-                def fechar_pop_ret(self): 
+                def fechar_pop_ret(s): 
                     print(var.get())
                     if node.get("var") == None: # Maintains compatibility with the use of the $ variable
                         eva_memory.var_dolar.append([var.get(), "<listen>"])
@@ -899,7 +892,7 @@ class Eva_Sim:
                 E1.pack()
                 Button(pop, text="    OK    ", font = self.font1, command=fechar_pop_bt).pack(pady=20)
                 # Wait for release, waiting for the user's response
-                while thread_pop_pause: 
+                while self.thread_pop_pause: 
                     time.sleep(0.5)
                 self.ledAnimation("STOP")
     
@@ -925,7 +918,7 @@ class Eva_Sim:
                     if v[1:] in eva_memory.vars:
                         texto = texto.replace(v, str(eva_memory.vars[v[1:]]))
                     else:
-                        # If the variable does not exist in the robot's memory, it displays an error message
+                        # If the variable does not exist in the robot's memory, it disself.plays an error message
                         print("================================")
                         error_string = "\nError -> The variable #" + v[1:] + " has not been declared. Please, check your code."
                         self.gui.terminal.insert(INSERT, error_string, "error")
@@ -960,15 +953,15 @@ class Eva_Sim:
             self.gui.terminal.insert(INSERT, '\nSTATE: Speaking: "' + texto[ind_random] + '"')
             self.gui.terminal.see(tkinter.END)
     
-            if RUNNING_MODE == "EVA_ROBOT":
-                client.publish(self.topic_base + "/log", "EVA will try to speak a text: " + texto[ind_random])
+            if self.RUNNING_MODE == "EVA_ROBOT":
+                self.client.publish(self.topic_base + "/log", "EVA will try to speak a text: " + texto[ind_random])
                 self.ledAnimation("SPEAK")
-                EVA_ROBOT_STATE = "BUSY" # Speech is a blocking function. the robot is busy
+                self.EVA_ROBOT_STATE = "BUSY" # Speech is a blocking function. the robot is busy
                 if node.get("tone") == None: # Usuario não selecionou a voz no talk. A opção global será utilizada
-                    client.publish(self.topic_base + "/talk", root.find("settings")[0].attrib["tone"] + "|" + texto[ind_random])
+                    self.client.publish(self.topic_base + "/talk", self.root.find("settings")[0].attrib["tone"] + "|" + texto[ind_random])
                 else:
-                    client.publish(self.topic_base + "/talk", node.attrib["tone"] + "|" + texto[ind_random]) # voz selecionado em talk será utilizada
-                while(EVA_ROBOT_STATE != "FREE"):
+                    self.client.publish(self.topic_base + "/talk", node.attrib["tone"] + "|" + texto[ind_random]) # voz selecionado em talk será utilizada
+                while(self.EVA_ROBOT_STATE != "FREE"):
                     pass
                 self.ledAnimation("STOP")
             else:
@@ -984,7 +977,7 @@ class Eva_Sim:
                     # Assume the default UTF-8 (Generates the hashing of the audio file)
                     # Also, uses the voice tone attribute in file hashing
                     if node.get("tone") == None: # Usuario não selecionou a voz no talk. A opção global será utilizada
-                        tone_voice = root.find("settings")[0].attrib["tone"]
+                        tone_voice = self.root.find("settings")[0].attrib["tone"]
                     else:
                         tone_voice = node.attrib["tone"]
     
@@ -992,35 +985,35 @@ class Eva_Sim:
                     file_name = "_audio_"  + tone_voice + hash_object.hexdigest()
     
                     # Checks if the speech audio already exists in the folder
-                    if not (os.path.isfile("audio_cache_files/" + file_name + audio_ext)): # If it doesn't exist, call Watson
+                    if not (os.path.isfile("audio_cache_files/" + file_name + self.audio_ext)): # If it doesn't exist, call Watson
                         audio_file_is_ok = False
                         while(not audio_file_is_ok):
                             # Eva TTS functions
-                            with open("audio_cache_files/" + file_name + audio_ext, 'wb') as audio_file:
+                            with open("audio_cache_files/" + file_name + self.audio_ext, 'wb') as audio_file:
                                 try:
-                                    res = tts.synthesize(texto[ind_random], accept = ibm_audio_ext, voice = tone_voice).get_result()
+                                    res = self.tts.synthesize(texto[ind_random], accept = self.ibm_audio_ext, voice = tone_voice).get_result()
                                     audio_file.write(res.content)
-                                    playsound("audio_cache_files/" + file_name + audio_ext, block = True) # Play the audio of the speech
+                                    self.playsound("audio_cache_files/" + file_name + self.audio_ext, block = True) # self.play the audio of the speech
                                 except:
                                     print("Voice exception")
                                     self.gui.terminal.insert(INSERT, "\nError when trying to select voice tone, please verify the tone atribute.\n", "error")
                                     self.gui.terminal.see(tkinter.END)
                                     exit(1)
-                            file_size = os.path.getsize("audio_cache_files/" + file_name + audio_ext)
+                            file_size = os.path.getsize("audio_cache_files/" + file_name + self.audio_ext)
                             if file_size == 0: # Corrupted file
                                 print("#### Corrupted file.. (It's necessary to use the same implementation like in tts-module in EVA robot!)")
-                                os.remove("audio_cache_files/" + file_name + audio_ext)
+                                os.remove("audio_cache_files/" + file_name + self.audio_ext)
                             else:
                                 audio_file_is_ok = True
                     else:
-                        playsound("audio_cache_files/" + file_name + audio_ext, block = True) # Play the audio of the speech
+                        self.playsound("audio_cache_files/" + file_name + self.audio_ext, block = True) # self.play the audio of the speech
                 ##############################
     
     
         elif node.tag == "evaEmotion":
             emotion = node.attrib["emotion"]
-            if RUNNING_MODE == "EVA_ROBOT":
-                client.publish(self.topic_base + "/evaEmotion", emotion) # Command for physical EVA
+            if self.RUNNING_MODE == "EVA_ROBOT":
+                self.client.publish(self.topic_base + "/evaEmotion", emotion) # Command for physical EVA
             self.gui.terminal.insert(INSERT, "\nSTATE: Expressing an emotion => " + emotion)
             self.gui.terminal.see(tkinter.END)
             self.evaEmotion(emotion)
@@ -1028,14 +1021,14 @@ class Eva_Sim:
     
         elif node.tag == "audio":
             sound_file =  node.attrib["source"]
-            block = False # Audio play does not block script execution
+            block = False # Audio self.play does not block script execution
             if node.attrib["block"] == "TRUE":
                 block = True
-            message_audio = '\nSTATE: Playing a sound: "' + "audio_files/" + sound_file + ".wav" + '", block=' + str(block)
+            message_audio = '\nSTATE: self.playing a sound: "' + "audio_files/" + sound_file + ".wav" + '", block=' + str(block)
     
             # Process Audio Effects settings
-            if root.find("settings").find("audioEffects") != None:
-                if root.find("settings").find("audioEffects").attrib["mode"] == "OFF":
+            if self.root.find("settings").find("audioEffects") != None:
+                if self.root.find("settings").find("audioEffects").attrib["mode"] == "OFF":
                     # Mode off implies the use of MUTED-SOUND file 
                     sound_file = "my_sounds/MUTED-SOUND.wav"
                     message_audio = "\nSTATE: Audio Effects DISABLED."
@@ -1045,22 +1038,22 @@ class Eva_Sim:
     
             try:
                 if block == True:
-                    if RUNNING_MODE == "EVA_ROBOT":
-                        client.publish(self.topic_base + "/log", "EVA will play a sound in blocking mode.")
-                        EVA_ROBOT_STATE = "BUSY"
-                        client.publish(self.topic_base + "/audio", sound_file + "|" + "TRUE")
-                        while (EVA_ROBOT_STATE != "FREE"):
+                    if self.RUNNING_MODE == "EVA_ROBOT":
+                        self.client.publish(self.topic_base + "/log", "EVA will self.play a sound in blocking mode.")
+                        self.EVA_ROBOT_STATE = "BUSY"
+                        self.client.publish(self.topic_base + "/audio", sound_file + "|" + "TRUE")
+                        while (self.EVA_ROBOT_STATE != "FREE"):
                             pass
                     else:
                         print(sound_file)
-                        playsound("audio_files/" + sound_file + ".wav", block = block)
+                        self.playsound("audio_files/" + sound_file + ".wav", block = block)
     
                 else: # Block = False
-                    if RUNNING_MODE == "EVA_ROBOT":
-                        client.publish(self.topic_base + "/log", "EVA will play a sound in no-blocking mode.")
-                        client.publish(self.topic_base + "/audio", sound_file + "|" + "FALSE")
+                    if self.RUNNING_MODE == "EVA_ROBOT":
+                        self.client.publish(self.topic_base + "/log", "EVA will self.play a sound in no-blocking mode.")
+                        self.client.publish(self.topic_base + "/audio", sound_file + "|" + "FALSE")
                     else:
-                        playsound("audio_files/" + sound_file + ".wav", block = block) 
+                        self.playsound("audio_files/" + sound_file + ".wav", block = block) 
             except Exception as e:
                 # Handle an exception. I didn't find any exceptions in the library documentation
                 error_string = "\nError -> " + str(e) + "."
@@ -1246,28 +1239,28 @@ class Eva_Sim:
     
         elif node.tag == "textEmotion":
             # Falta implementar o modo Simulador ###############
-            if RUNNING_MODE == "EVA_ROBOT": 
-                client.publish(self.topic_base + "/log", "EVA is analysing the text emotion...")
-                EVA_ROBOT_STATE = "BUSY"
+            if self.RUNNING_MODE == "EVA_ROBOT": 
+                self.client.publish(self.topic_base + "/log", "EVA is analysing the text emotion...")
+                self.EVA_ROBOT_STATE = "BUSY"
                 self.ledAnimation("RAINBOW")
                 if node.get("language") == None:
-                    client.publish(self.topic_base + "/textEmotion", config.LANG_DEFAULT_GOOGLE_TRANSLATING + "|" + eva_memory.var_dolar[-1][0])
+                    self.client.publish(self.topic_base + "/textEmotion", config.LANG_DEFAULT_GOOGLE_TRANSLATING + "|" + eva_memory.var_dolar[-1][0])
                 else:
-                    client.publish(self.topic_base + "/textEmotion", node.attrib["language"] + "|" + eva_memory.var_dolar[-1][0])
+                    self.client.publish(self.topic_base + "/textEmotion", node.attrib["language"] + "|" + eva_memory.var_dolar[-1][0])
                     
     
-                while (EVA_ROBOT_STATE != "FREE"):
+                while (self.EVA_ROBOT_STATE != "FREE"):
                     pass
                 
                 if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    eva_memory.var_dolar.append([EVA_DOLLAR, "<textEmotion>"])
+                    eva_memory.var_dolar.append([self.EVA_DOLLAR, "<textEmotion>"])
                     self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion: var=$" + ", value = " + eva_memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
                     self.ledAnimation("STOP")
                 else:
                     var_name = node.attrib["var"]
-                    eva_memory.vars[var_name] = EVA_DOLLAR
+                    eva_memory.vars[var_name] = self.EVA_DOLLAR
                     print("Eva ram => ", eva_memory.vars)
                     self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
                     self.tab_load_mem_vars() # Enter data from variable memory into the var table
@@ -1320,7 +1313,7 @@ class Eva_Sim:
                 y = (hs/2) - (h/2)  
                 pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
                 Label(pop, text="Eva is analysing the sentiment of your text. Please, choose one emotion!", font = ('Arial', 10)).place(x = 290, y = 10)
-                # Images are displayed using labels
+                # Images are disself.played using labels
                 Label(pop, image=img_neutral).place(x = 10, y = 50)
                 Label(pop, image=img_happy).place(x = 147, y = 50)
                 Label(pop, image=img_angry).place(x = 284, y = 50)
@@ -1337,7 +1330,7 @@ class Eva_Sim:
                 Radiobutton(pop, text = "Disgust", variable = var, font = self.font1, command = None, value = "DISGUST").place(x = 855, y = 185)
                 Button(pop, text = "           OK          ", font = self.font1, command = fechar_pop).place(x = 430, y = 215)
                 # Wait for release, waiting for the user's response
-                while thread_pop_pause: 
+                while self.thread_pop_pause: 
                     time.sleep(0.5)
     
         elif node.tag == "userHandPose":
@@ -1362,7 +1355,7 @@ class Eva_Sim:
                     var_name = node.attrib["var"]
                     eva_memory.vars[var_name] = var.get()
                     print("Eva ram => ", eva_memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + EVA_DOLLAR)
+                    self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                     self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                     self.gui.terminal.see(tkinter.END)
     
@@ -1381,7 +1374,7 @@ class Eva_Sim:
                             var_name = node.attrib["var"]
                             eva_memory.vars[var_name] = var.get()
                             print("Eva ram => ", eva_memory.vars)
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + EVA_DOLLAR)
+                            self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                             self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                             self.gui.terminal.see(tkinter.END)
                             print("userHandPose command USING VAR...")
@@ -1423,31 +1416,31 @@ class Eva_Sim:
                 Radiobutton(pop, text = "Three", variable = var, font = self.font1, command = None, value = "THREE").place(x = 575, y = 185)
                 Button(pop, text = "     OK     ", font = self.font1, command = fechar_pop).place(x = 310, y = 215)
                 # espera pela liberacao, aguardando a resposta do usuario
-                while thread_pop_pause: 
+                while self.thread_pop_pause: 
                     time.sleep(0.5)
                 self.ledAnimation("STOP")
     
         elif node.tag == "userEmotion":
             # global img_neutral, img_happy, img_angry, img_sad, img_surprise, img_fear, img_desgust
             
-            if RUNNING_MODE == "EVA_ROBOT": 
-                client.publish(self.topic_base + "/log", "EVA is capturing the user emotion...")
-                EVA_ROBOT_STATE = "BUSY"
+            if self.RUNNING_MODE == "EVA_ROBOT": 
+                self.client.publish(self.topic_base + "/log", "EVA is capturing the user emotion...")
+                self.EVA_ROBOT_STATE = "BUSY"
                 self.ledAnimation("LISTEN")
-                client.publish(self.topic_base + "/userEmotion", " ")
+                self.client.publish(self.topic_base + "/userEmotion", " ")
     
-                while (EVA_ROBOT_STATE != "FREE"):
+                while (self.EVA_ROBOT_STATE != "FREE"):
                     pass
                 
                 if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    eva_memory.var_dolar.append([EVA_DOLLAR, "<listen>"])
+                    eva_memory.var_dolar.append([self.EVA_DOLLAR, "<listen>"])
                     self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion: var=$" + ", value = " + eva_memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
                     self.ledAnimation("STOP")
                 else:
                     var_name = node.attrib["var"]
-                    eva_memory.vars[var_name] = EVA_DOLLAR
+                    eva_memory.vars[var_name] = self.EVA_DOLLAR
                     print("Eva ram => ", eva_memory.vars)
                     self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
                     self.tab_load_mem_vars() # Enter data from variable memory into the variable table
@@ -1473,7 +1466,7 @@ class Eva_Sim:
                         var_name = node.attrib["var"]
                         eva_memory.vars[var_name] = var.get()
                         print("Eva ram => ", eva_memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : (using the user variable '" + var_name + "'): " + EVA_DOLLAR)
+                        self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                         self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                         self.gui.terminal.see(tkinter.END)
                
@@ -1489,7 +1482,7 @@ class Eva_Sim:
                             var_name = node.attrib["var"]
                             eva_memory.vars[var_name] = var.get()
                             print("Eva ram => ", eva_memory.vars)
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : (using the user variable '" + var_name + "'): " + EVA_DOLLAR)
+                            self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                             self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                             self.gui.terminal.see(tkinter.END)
                             print("userEmotion command USING VAR...")
@@ -1537,30 +1530,30 @@ class Eva_Sim:
                     Radiobutton(pop, text = "Disgust", variable = var, font = self.font1, command = None, value = "DISGUST").place(x = 852, y = 185)
                     Button(pop, text = "     OK     ", font = self.font1, command = fechar_pop).place(x = 440, y = 215)
                     # espera pela liberacao, aguardando a resposta do usuario
-                    while thread_pop_pause: 
+                    while self.thread_pop_pause: 
                         time.sleep(0.5)
     
         elif node.tag == "qrRead":
-            if RUNNING_MODE == "EVA_ROBOT": 
-                client.publish(self.topic_base + "/log", "EVA is capturing QR Code information...")
-                EVA_ROBOT_STATE = "BUSY"
-                client.publish(self.topic_base + "/qrRead", " ")
+            if self.RUNNING_MODE == "EVA_ROBOT": 
+                self.client.publish(self.topic_base + "/log", "EVA is capturing QR Code information...")
+                self.EVA_ROBOT_STATE = "BUSY"
+                self.client.publish(self.topic_base + "/qrRead", " ")
                 self.ledAnimation("LISTEN")
                 
     
-                while (EVA_ROBOT_STATE != "FREE"):
+                while (self.EVA_ROBOT_STATE != "FREE"):
                     pass
                 
                 
                 if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    eva_memory.var_dolar.append([EVA_DOLLAR, "<qrRead>"])
+                    eva_memory.var_dolar.append([self.EVA_DOLLAR, "<qrRead>"])
                     self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + eva_memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
                     self.ledAnimation("STOP")
                 else:
                     var_name = node.attrib["var"]
-                    eva_memory.vars[var_name] = EVA_DOLLAR
+                    eva_memory.vars[var_name] = self.EVA_DOLLAR
                     print("Eva ram => ", eva_memory.vars)
                     self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
                     self.tab_load_mem_vars() # Enter data from variable memory into the var table
@@ -1587,14 +1580,14 @@ class Eva_Sim:
                         var_name = node.attrib["var"]
                         eva_memory.vars[var_name] = var.get()
                         print("Eva ram => ", eva_memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: qrRead : (using the user variable '" + var_name + "'): " + EVA_DOLLAR)
+                        self.gui.terminal.insert(INSERT, "\nSTATE: qrRead : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                         self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                         self.gui.terminal.see(tkinter.END)
     
                 elif self.gui.chk_qrRead_value.get() == 0:
                 
                     # Pop up window closing function for the <return> key
-                    def fechar_pop_ret(self): 
+                    def fechar_pop_ret(s): 
                         print(var.get())
                         if node.get("var") == None: # Maintains compatibility with the use of the $ variable
                             eva_memory.var_dolar.append([var.get(), "<qrRead>"])
@@ -1656,16 +1649,16 @@ class Eva_Sim:
                     E1 = Entry(pop, textvariable = var, font = ('Arial', 10))
                     E1.bind("<Return>", fechar_pop_ret)
                     E1.pack()
-                    Button(pop, text="    OK    ", font = font1, command=fechar_pop_bt).pack(pady=20)
+                    Button(pop, text="    OK    ", font = self.font1, command=fechar_pop_bt).pack(pady=20)
                     # Wait for release, waiting for the user's response
-                    while thread_pop_pause: 
+                    while self.thread_pop_pause: 
                         time.sleep(0.5)
                     self.ledAnimation("STOP")
     
         elif node.tag == "userID":
-            if RUNNING_MODE == "EVA_ROBOT": 
+            if self.RUNNING_MODE == "EVA_ROBOT": 
                 EVA_ROBOT_STATE = "BUSY"
-                client.publish(self.topic_base + "/userID", " ")
+                self.client.publish(self.topic_base + "/userID", " ")
                 self.ledAnimation("LISTEN")
                 
     
@@ -1673,14 +1666,14 @@ class Eva_Sim:
                     pass
                 
                 if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    eva_memory.var_dolar.append([EVA_DOLLAR, "<userID>"])
+                    eva_memory.var_dolar.append([self.EVA_DOLLAR, "<userID>"])
                     self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + eva_memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
     
                 else:
                     var_name = node.attrib["var"]
-                    eva_memory.vars[var_name] = EVA_DOLLAR
+                    eva_memory.vars[var_name] = self.EVA_DOLLAR
                     print("Eva ram => ", eva_memory.vars)
                     self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
                     self.tab_load_mem_vars() # Enter data from variable memory into the var table
@@ -1691,8 +1684,8 @@ class Eva_Sim:
     
             else:
             
-                lock_thread_pop()
-                ledAnimation("LISTEN")
+                self.lock_thread_pop()
+                self.ledAnimation("LISTEN")
                 if self.gui.chk_userid_value.get() == 1:
                 
                     result_recognition = fr.main()
@@ -1702,38 +1695,38 @@ class Eva_Sim:
                     if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
                         eva_memory.var_dolar.append([var.get(), "<userID>"])
                         self.gui.terminal.insert(INSERT, "\nSTATE: userID : var=$" + ", value=" + eva_memory.var_dolar[-1][0])
-                        tab_load_mem_dollar()
+                        self.tab_load_mem_dollar()
                         self.gui.terminal.see(tkinter.END)
                     
                     else:
                         var_name = node.attrib["var"]
                         eva_memory.vars[var_name] = var.get()
                         print("Eva ram => ", eva_memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userID : (using the user variable '" + var_name + "'): " + EVA_DOLLAR)
-                        tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
+                        self.gui.terminal.insert(INSERT, "\nSTATE: userID : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
+                        self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                         self.gui.terminal.see(tkinter.END)
     
                 elif self.gui.chk_userid_value.get() == 0:
                 # Pop up window closing function for the <return> key
-                    def fechar_pop_ret(self): 
+                    def fechar_pop_ret(s): 
                         print(var.get())
                         if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
                             eva_memory.var_dolar.append([var.get(), "<userID>"])
                             self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + eva_memory.var_dolar[-1][0])
-                            tab_load_mem_dollar()
+                            self.tab_load_mem_dollar()
                             self.gui.terminal.see(tkinter.END)
                             pop.destroy()
-                            unlock_thread_pop() # Reactivate the script processing thread
+                            self.unlock_thread_pop() # Reactivate the script processing thread
                         else:
                             var_name = node.attrib["var"]
                             eva_memory.vars[var_name] = var.get()
                             print("Eva ram => ", eva_memory.vars)
                             self.gui.terminal.insert(INSERT, "\nSTATE: userID reading (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
-                            tab_load_mem_vars() # Enter data from variable memory into the var table
+                            self.tab_load_mem_vars() # Enter data from variable memory into the var table
                             self.gui.terminal.see(tkinter.END)
                             print("userID command USING VAR...")
                             pop.destroy()
-                            unlock_thread_pop() # Reactivate the script processing thread
+                            self.unlock_thread_pop() # Reactivate the script processing thread
                     
                     # Pop up window closing function for OK button
                     def fechar_pop_bt(): 
@@ -1741,20 +1734,20 @@ class Eva_Sim:
                         if node.get("var") == None: # Maintains compatibility with the use of the $ variable
                             eva_memory.var_dolar.append([var.get(), "<userID>"])
                             self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + eva_memory.var_dolar[-1][0])
-                            tab_load_mem_dollar()
+                            self.tab_load_mem_dollar()
                             self.gui.terminal.see(tkinter.END)
                             pop.destroy()
-                            unlock_thread_pop() # Reactivate the script processing thread
+                            self.unlock_thread_pop() # Reactivate the script processing thread
                         else:
                             var_name = node.attrib["var"]
                             eva_memory.vars[var_name] = var.get()
                             print("Eva ram => ", eva_memory.vars)
                             self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(eva_memory.vars[var_name]))
-                            tab_load_mem_vars() # Enter data from variable memory into the var table
+                            self.tab_load_mem_vars() # Enter data from variable memory into the var table
                             self.gui.terminal.see(tkinter.END)
                             print("userID command USING VAR...")
                             pop.destroy()
-                            unlock_thread_pop() # Reactivate the script processing thread
+                            self.unlock_thread_pop() # Reactivate the script processing thread
                         
                     # Window (self.gui) creation
                     img_userID = PhotoImage(file = "images/img_userID.png")
@@ -1777,92 +1770,89 @@ class Eva_Sim:
                     E1 = Entry(pop, textvariable = var, font = ('Arial', 10))
                     E1.bind("<Return>", fechar_pop_ret)
                     E1.pack()
-                    Button(pop, text="    OK    ", font = font1, command=fechar_pop_bt).pack(pady=20)
+                    Button(pop, text="    OK    ", font = self.font1, command=fechar_pop_bt).pack(pady=20)
                     # Wait for release, waiting for the user's response
-                    while thread_pop_pause: 
+                    while self.thread_pop_pause: 
                         time.sleep(0.5)
-                    ledAnimation("STOP")
+                    self.ledAnimation("STOP")
 
 
-def busca_commando(key : str): # The keys are strings
-	# Search in settings. This is because "voice" is in settings and voice is always the first element
-	for elem in root.find("settings").iter():
-		if elem.get("key") != None: # Check if node has key attribute
-			if elem.attrib["key"] == key:
-				return elem
-	# Search within the script
-	for elem in root.find("script").iter(): # Go through all nodes in the script
-		if elem.get("key") != None: # Check if node has key attribute
-			if elem.attrib["key"] == key:
-				return elem
+    def busca_commando(self, key : str): # The keys are strings
+        # Search in settings. This is because "voice" is in settings and voice is always the first element
+        for elem in self.root.find("settings").iter():
+            if elem.get("key") != None: # Check if node has key attribute
+                if elem.attrib["key"] == key:
+                    return elem
+        # Search within the script
+        for elem in self.root.find("script").iter(): # Go through all nodes in the script
+            if elem.get("key") != None: # Check if node has key attribute
+                if elem.attrib["key"] == key:
+                    return elem
+    
+    
+    # Search and insert links in the list that have "att_from" equal to the "from" attribute of the link
+    def busca_links(self, att_from):
+        achou_link = False
+        for i in range(len(self.links_node)):
+            if att_from == self.links_node[i].attrib["from"]:
+                self.fila_links.append(self.links_node[i])
+                achou_link = True
+        return achou_link
 
 
-# Search and insert links in the list that have "att_from" equal to the "from" attribute of the link
-def busca_links(att_from):
-    achou_link = False
-    for i in range(len(links_node)):
-        if att_from == links_node[i].attrib["from"]:
-            fila_links.append(links_node[i])
-            achou_link = True
-    return achou_link
+    # Execute commands in the link stack
+    def link_process(self, anterior = -1):
+        print("self.play state............", self.play)
+        self.gui.terminal.insert(INSERT, "\n---------------------------------------------------")
+        self.gui.terminal.insert(INSERT, "\nSTATE: Starting the script: " + self.root.attrib["name"] + "_EvaML.xml")
+        self.gui.terminal.see(tkinter.END)
+
+        if self.RUNNING_MODE == "EVA_ROBOT":
+            self.client.publish(self.topic_base + "/log", "Starting the script: " + self.root.attrib["name"] + "_EvaML.xml")
+
+        while (len(self.fila_links) != 0) and (self.play == True):
+            from_key = self.fila_links[0].attrib["from"] # Key of the command to execute
+            to_key = self.fila_links[0].attrib["to"] # Key of next command
+            print("from:", from_key, ", to_key:", to_key)
+            comando_from = self.busca_commando(from_key).tag # Tag of the command to be executed
+
+            # Prevents the same node from running consecutively. This happens with the node that precedes the "cases"
+            if anterior != from_key:
+                self.exec_comando(self.busca_commando(from_key))
+                anterior = from_key
+                print("ant: ", anterior, ", from: ", from_key)
 
 
-# Execute commands in the link stack
-def link_process(anterior = -1):
-    global play
-    print("Play state............", play)
-    self.gui.terminal.insert(INSERT, "\n---------------------------------------------------")
-    self.gui.terminal.insert(INSERT, "\nSTATE: Starting the script: " + root.attrib["name"] + "_EvaML.xml")
-    self.gui.terminal.see(tkinter.END)
+            if (comando_from == "case") or (comando_from == "default"): # If the command executed was a case or a default
+                if eva_memory.reg_case == 1: # Check the flag to see if the "case" was true
+                    self.fila_links = [] # Empty the queue, as the flow will continue from this "case" onwards
+                    print("Jumping the command = ", comando_from)
+                    # Follows the flow of the success "case" looking for the "prox. link"
+                    if not(self.busca_links(to_key)): # If there is no longer a link, the command indicated by "to_key" is the last one in the flow
+                        self.exec_comando(self.busca_commando(to_key))
+                        print("End of block.")
 
-    if RUNNING_MODE == "EVA_ROBOT":
-        client.publish(self.topic_base + "/log", "Starting the script: " + root.attrib["name"] + "_EvaML.xml")
-
-    global fila_links
-    while (len(fila_links) != 0) and (play == True):
-        from_key = fila_links[0].attrib["from"] # Key of the command to execute
-        to_key = fila_links[0].attrib["to"] # Key of next command
-        print("from:", from_key, ", to_key:", to_key)
-        comando_from = busca_commando(from_key).tag # Tag of the command to be executed
-
-        # Prevents the same node from running consecutively. This happens with the node that precedes the "cases"
-        if anterior != from_key:
-            exec_comando(busca_commando(from_key))
-            anterior = from_key
-            print("ant: ", anterior, ", from: ", from_key)
-        
-        
-        if (comando_from == "case") or (comando_from == "default"): # If the command executed was a case or a default
-            if eva_memory.reg_case == 1: # Check the flag to see if the "case" was true
-                fila_links = [] # Empty the queue, as the flow will continue from this "case" onwards
-                print("Jumping the command = ", comando_from)
-                # Follows the flow of the success "case" looking for the "prox. link"
-                if not(busca_links(to_key)): # If there is no longer a link, the command indicated by "to_key" is the last one in the flow
-                    exec_comando(busca_commando(to_key))
-                    print("End of block.")
-                    
-            else:
+                else:
+                    print("The element:", comando_from, " will be removed from queue.")
+                    self.fila_links.pop(0) # If the "case" failed, it is removed from the queue and consequently its flow is discarded
+                    print("false")
+            else: # If the command was not a "case"
                 print("The element:", comando_from, " will be removed from queue.")
-                fila_links.pop(0) # If the "case" failed, it is removed from the queue and consequently its flow is discarded
-                print("false")
-        else: # If the command was not a "case"
-            print("The element:", comando_from, " will be removed from queue.")
-            fila_links.pop(0) # Remove the link from the queue
-            if not(busca_links(to_key)): # As previously mentioned
-                exec_comando(busca_commando(to_key))
-                print("End of block.")
-    self.gui.terminal.insert(INSERT, "\nSTATE: End of script.")
-    self.gui.terminal.see(tkinter.END)
-    # Restore the buttons states (run and stop)
-    self.gui.bt_run_sim['state'] = NORMAL
-    self.gui.bt_run_sim.bind("<Button-1>", setSimMode)
-    if ROBOT_MODE_ENABLED: self.gui.bt_run_robot['state'] = NORMAL
-    self.gui.bt_run_robot.bind("<Button-1>", setEVAMode)
-    self.gui.bt_import['state'] = NORMAL
-    self.gui.bt_reload['state'] = NORMAL
-    self.gui.bt_import.bind("<Button-1>", importFileThread)
-    self.gui.bt_stop['state'] = DISABLED
-    self.gui.bt_stop.unbind("<Button1>")
+                self.fila_links.pop(0) # Remove the link from the queue
+                if not(self.busca_links(to_key)): # As previously mentioned
+                    self.exec_comando(self.busca_commando(to_key))
+                    print("End of block.")
+        self.gui.terminal.insert(INSERT, "\nSTATE: End of script.")
+        self.gui.terminal.see(tkinter.END)
+        # Restore the buttons states (run and stop)
+        self.gui.bt_run_sim['state'] = NORMAL
+        self.gui.bt_run_sim.bind("<Button-1>", self.setSimMode)
+        if ROBOT_MODE_ENABLED: self.gui.bt_run_robot['state'] = NORMAL
+        self.gui.bt_run_robot.bind("<Button-1>", self.setEVAMode)
+        self.gui.bt_import['state'] = NORMAL
+        self.gui.bt_reload['state'] = NORMAL
+        self.gui.bt_import.bind("<Button-1>", self.importFileThread)
+        self.gui.bt_stop['state'] = DISABLED
+        self.gui.bt_stop.unbind("<Button1>")
 
-
-self.gui.mainloop()
+e = Eva_Sim()
