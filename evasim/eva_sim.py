@@ -15,6 +15,9 @@ import xml.etree.ElementTree as ET
 
 from eva_memory import EvaMemory # EvaSIM memory module
 
+from controllers.state_controller import StateController
+
+import experiences.experiences
 import json_to_evaml_conv # json to XML conversion module (No longer used in this version of the simulator)
 
 from tkinter import *
@@ -49,10 +52,14 @@ import config # Module with the constants and parameters used in other modules.
 TTS_IBM_WATSON = False # Define the use of IBM Watson service
 ROBOT_MODE_ENABLED = False # 
 
+import gui_linux as EvaSIM_gui # Definition of the graphical user interface (Linux)
 
 class EvaSim:
-    def __init__(self, mainWindow : Tk, step_execution = False):
+    def __init__(self, name = "none", step_execution = False):
         global TTS_IBM_WATSON, ROBOT_MODE_ENABLED
+
+        self.name = name
+
         if len(sys.argv) > 1: # Verify if is an argument in the command line
             for parameter in sys.argv[1:]: # Sweep all parameters
                 if parameter.lower() == "tts=ibm-watson": # Watson was selected
@@ -75,7 +82,7 @@ class EvaSim:
         # Select the self.gui definition file for the host operating system
         if platform.system() == "Linux":
             print("\nLinux platform identified. Loading self.gui formatting for Linux.\n")
-            import gui_linux as EvaSIM_gui # Definition of the graphical user interface (Linux)
+            # import gui_linux as EvaSIM_gui # Definition of the graphical user interface (Linux)
             audio_ext = ".mp3" # Audio extension used by the audio library on Linux
             ibm_audio_ext = "audio/mp3" # Audio extension used to generate watson audios
         elif platform.system() == "Windows":
@@ -163,10 +170,18 @@ class EvaSim:
         self.script_file = "" # Variable that stores the pointer to the xml script file on disk.
 
         # Eva memory
-        self.memory = EvaMemory()
+        self.memory = EvaMemory() 
 
+        self.state_controller = StateController()
+
+        # Activate step-by-step execution
+        self.exec_comand_event = threading.Event()
+        self.step_execution = step_execution
+
+
+    def init_sim(self, root : Tk):
         # Create the Tkinter window
-        self.window = Toplevel(master=mainWindow)
+        self.window = Toplevel(master=root)
         self.gui = EvaSIM_gui.Gui(self.window) # Instance of the self.gui class within the graphical user interface definition module
 
         self.font1 = self.gui.font1 # Sse the same font defined in the self.gui module
@@ -269,10 +284,6 @@ class EvaSim:
 
         # TTS buttons binding
         self.gui.bt_send_tts.bind("<Button-1>", self.woz_tts)
-
-        # Activate step-by-step execution
-        self.exec_comand_event = threading.Event()
-        self.step_execution = step_execution
 
 
     # Variable control function that blocks popups
@@ -387,8 +398,8 @@ class EvaSim:
 
         # Unblock the thread to finish the script
         if self.step_execution:
-            self.exec_comand_event().set()
-            self.exec_comand_event().clear()
+            self.exec_comand_event.set()
+            self.exec_comand_event.clear()
 
         self.EVA_ROBOT_STATE = "FREE" # libera a execução, caso esteja executando algum comando bloqueante
 
@@ -411,7 +422,8 @@ class EvaSim:
             self.script_file = "_json_to_evaml_converted.xml" # Json file converted to XML
         else: # Reading an XML
             print("Running a XML file.")
-        # VM variables
+
+        # # VM variables
         tree = ET.parse(self.script_file)  # XML code file
         self.root = tree.getroot() # EvaML root node
         self.script_node = self.root.find("script")
@@ -424,11 +436,32 @@ class EvaSim:
         self.gui.bt_reload['state'] = NORMAL
         self.evaEmotion("NEUTRAL")
         only_file_name = str(self.script_file).split("/")[-1].split("'")[0]
-        self.window.title("Eva Simulator for EvaML - Version 2.0 - UFF / MidiaCom / CICESE -- [ " + only_file_name + " ]")
+        self.window.title(self.name + " | Eva Simulator for EvaML - Version 2.0 - UFF / MidiaCom / CICESE -- [ " + only_file_name + " ]")
+        self.gui.terminal.insert(INSERT, '\nSTATE: Script => ' + only_file_name + ' was LOADED.')
+        self.gui.terminal.see(tkinter.END)
+
+    def importfile_API(self, path):
+        import experiences.experiences
+        if self.play: return
+        self.script_file = open(mode="r", file=experiences.experiences.get_path(path))
+        tree = ET.parse(self.script_file)  # XML code file
+        self.root = tree.getroot() # EvaML root node
+        self.script_node = self.root.find("script")
+        self.links_node = self.root.find("links")
+        self.gui.bt_run_sim['state'] = NORMAL
+        self.gui.bt_run_sim.bind("<Button-1>", self.setSimMode)
+        if ROBOT_MODE_ENABLED: self.gui.bt_run_robot['state'] = NORMAL
+        self.gui.bt_run_robot.bind("<Button-1>", self.setEVAMode)
+        self.gui.bt_stop['state'] = DISABLED
+        self.gui.bt_reload['state'] = NORMAL
+        self.evaEmotion("NEUTRAL")
+        only_file_name = str(self.script_file).split("/")[-1].split("'")[0]
+        self.window.title(self.name + " | Eva Simulator for EvaML - Version 2.0 - UFF / MidiaCom / CICESE -- [ " + only_file_name + " ]")
         self.gui.terminal.insert(INSERT, '\nSTATE: Script => ' + only_file_name + ' was LOADED.')
         self.gui.terminal.see(tkinter.END)
 
     def reloadFile(self, s):
+        if self.play: return
         self.script_file.seek(0) # Places the file object pointer at the beginning
         tree = ET.parse(self.script_file) # # XML code file
         self.root = tree.getroot() # EvaML root node
@@ -677,7 +710,10 @@ class EvaSim:
 
     # Proceeds the execution to the next step
     def next_command_step(self):
+        if not self.play:
+            return False
         self.exec_comand_event.set()
+        return True 
 
     # Virtual machine functions
     # Execute the commands
@@ -699,16 +735,28 @@ class EvaSim:
         if node.tag == "motion": # Movement of the head and arms
             if node.get("left-arm") != None: # Move the left arm
                 self.gui.terminal.insert(INSERT, "\nSTATE: Moving the left arm! Movement type => " + node.attrib["left-arm"], "motion")
+
+                self.state_controller.command_motion("left-arm", node.attrib["left-arm"])
+                
                 self.gui.terminal.see(tkinter.END)
             if node.get("right-arm") != None: # Move the right arm
                 self.gui.terminal.insert(INSERT, "\nSTATE: Moving the right arm! Movement type => " + node.attrib["right-arm"], "motion")
+
+                self.state_controller.command_motion("right-arm", node.attrib["right-arm"])
+
                 self.gui.terminal.see(tkinter.END)
             if node.get("head") != None: # Move head with the new format (<head> element)
                     self.gui.terminal.insert(INSERT, "\nSTATE: Moving the head! Movement type => " + node.attrib["head"], "motion")
+
+                    self.state_controller.command_motion("head", node.attrib["head"])
+
                     self.gui.terminal.see(tkinter.END)
             else: # Check if the old version was used
                 if node.get("type") != None: # Maintaining compatibility with the old version of the motion element
                     self.gui.terminal.insert(INSERT, "\nSTATE: Moving the head! Movement type => " + node.attrib["type"], "motion")
+
+                    self.state_controller.command_motion("type", node.attrib["type"])
+
                     self.gui.terminal.see(tkinter.END)
             print("Moving the head and/or the arms.")
             if self.RUNNING_MODE == "EVA_ROBOT":
@@ -972,6 +1020,9 @@ class EvaSim:
             print(texto)
             ind_random = rnd.randint(0, len(texto)-1)
             self.gui.terminal.insert(INSERT, '\nSTATE: Speaking: "' + texto[ind_random] + '"')
+            
+            self.state_controller.command_talk(texto[ind_random])
+
             self.gui.terminal.see(tkinter.END)
     
             if self.RUNNING_MODE == "EVA_ROBOT":
@@ -1800,6 +1851,8 @@ class EvaSim:
         if self.step_execution: 
             self.exec_comand_event.clear()
 
+        self.state_controller.trigger_event()
+
     def busca_commando(self, key : str): # The keys are strings
         # Search in settings. This is because "voice" is in settings and voice is always the first element
         for elem in self.root.find("settings").iter():
@@ -1865,6 +1918,9 @@ class EvaSim:
                 if not(self.busca_links(to_key)): # As previously mentioned
                     self.exec_comando(self.busca_commando(to_key))
                     print("End of block.")
+        
+        self.state_controller.command_end()
+
         self.gui.terminal.insert(INSERT, "\nSTATE: End of script.")
         self.gui.terminal.see(tkinter.END)
         # Restore the buttons states (run and stop)
@@ -1877,12 +1933,3 @@ class EvaSim:
         self.gui.bt_import.bind("<Button-1>", self.importFileThread)
         self.gui.bt_stop['state'] = DISABLED
         self.gui.bt_stop.unbind("<Button1>")
-
-
-if __name__ == "__main__":
-    root = Tk()
-    e = EvaSim(root)
-    e1 = EvaSim(root)
-    e2 = EvaSim(root)
-    e3 = EvaSim(root)
-    root.mainloop()
