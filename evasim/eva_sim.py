@@ -51,7 +51,7 @@ ROBOT_MODE_ENABLED = False #
 
 
 class EvaSim:
-    def __init__(self):
+    def __init__(self, mainWindow : Tk, step_execution = False):
         global TTS_IBM_WATSON, ROBOT_MODE_ENABLED
         if len(sys.argv) > 1: # Verify if is an argument in the command line
             for parameter in sys.argv[1:]: # Sweep all parameters
@@ -166,7 +166,7 @@ class EvaSim:
         self.memory = EvaMemory()
 
         # Create the Tkinter window
-        self.window = Tk()
+        self.window = Toplevel(master=mainWindow)
         self.gui = EvaSIM_gui.Gui(self.window) # Instance of the self.gui class within the graphical user interface definition module
 
         self.font1 = self.gui.font1 # Sse the same font defined in the self.gui module
@@ -270,7 +270,10 @@ class EvaSim:
         # TTS buttons binding
         self.gui.bt_send_tts.bind("<Button-1>", self.woz_tts)
 
-        self.gui.mainloop()
+        # Activate step-by-step execution
+        self.exec_comand_event = threading.Event()
+        self.step_execution = step_execution
+
 
     # Variable control function that blocks popups
     def lock_thread_pop(self):
@@ -381,6 +384,12 @@ class EvaSim:
         self.gui.bt_reload['state'] = NORMAL
         self.gui.bt_import.bind("<Button-1>", self.importFileThread)
         self.play = False # desativa a var de self.play do script. Faz com que o script seja interrompido
+
+        # Unblock the thread to finish the script
+        if self.step_execution:
+            self.exec_comand_event().set()
+            self.exec_comand_event().clear()
+
         self.EVA_ROBOT_STATE = "FREE" # libera a execução, caso esteja executando algum comando bloqueante
 
     # Import file thread
@@ -666,13 +675,19 @@ class EvaSim:
             self.gui.canvas.create_oval(300, 205, 377, 285, fill = "#000000", outline = "#000000" ) # cor preta indica light off
             self.gui.canvas.create_image(340, 285, image = self.gui.bulb_image) # redesenha a lampada
 
-
+    # Proceeds the execution to the next step
+    def next_command_step(self):
+        self.exec_comand_event.set()
 
     # Virtual machine functions
     # Execute the commands
     def exec_comando(self, node):
         global img_neutral, img_happy, img_angry, img_sad, img_surprise
         
+        # Clear event at the end of the function
+        if self.step_execution: 
+            self.exec_comand_event.wait()
+
         if node.tag == "voice":
             self.gui.terminal.insert(INSERT, "\nSTATE: Selected Voice => " + node.attrib["tone"])
             self.gui.terminal.see(tkinter.END)
@@ -1782,6 +1797,8 @@ class EvaSim:
                         time.sleep(0.5)
                     self.ledAnimation("STOP")
 
+        if self.step_execution: 
+            self.exec_comand_event.clear()
 
     def busca_commando(self, key : str): # The keys are strings
         # Search in settings. This is because "voice" is in settings and voice is always the first element
@@ -1861,5 +1878,11 @@ class EvaSim:
         self.gui.bt_stop['state'] = DISABLED
         self.gui.bt_stop.unbind("<Button1>")
 
+
 if __name__ == "__main__":
-    e = EvaSim()
+    root = Tk()
+    e = EvaSim(root)
+    e1 = EvaSim(root)
+    e2 = EvaSim(root)
+    e3 = EvaSim(root)
+    root.mainloop()
