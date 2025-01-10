@@ -4,11 +4,13 @@ from asyncio import Event
 class Commands(str, Enum):
     MOTION = "Motion"
     TALK = "Talk"
+    WAIT = "Wait"
     END = "End of script"
 
-class StateController:
-    def __init__(self):
-        self.current_command = []
+class SIM_APIController:
+    def __init__(self, id):
+        self.id = id
+        self.current_command = {}
         self.result_event = Event()
 
     async def get_result(self):
@@ -35,12 +37,23 @@ class StateController:
             if attrib == "type":
                 command["type"] = detail
 
-        self.current_command.append(command)
+        self.current_command.update(command)
+        self.trigger_event()
 
     def command_talk(self, text : str):
         command = {"command" : Commands.TALK.value}
         command["text"] = text
-        self.current_command.append(command)
+        self.current_command.update(command)
+        self.trigger_event()
 
     def command_end(self):
-        self.current_command.append({"command" : Commands.END})
+        self.current_command.update({"command" : Commands.END})
+        self.trigger_event()
+
+    def command_wait(self, ms : int):
+        self.current_command.update({"command":Commands.WAIT, "time":ms})
+        self.trigger_event()
+
+    def command_listen(self):
+        self.current_command.update({"command":"Listen", "state":"waiting input"})
+        self.trigger_event()

@@ -15,7 +15,8 @@ import xml.etree.ElementTree as ET
 
 from eva_memory import EvaMemory # EvaSIM memory module
 
-from controllers.state_controller import StateController
+from controllers.sim_api_controller import SIM_APIController
+from controllers.api_sim_controller import API_SIMController
 
 import experiences.experiences
 import json_to_evaml_conv # json to XML conversion module (No longer used in this version of the simulator)
@@ -55,7 +56,7 @@ ROBOT_MODE_ENABLED = False #
 import gui_linux as EvaSIM_gui # Definition of the graphical user interface (Linux)
 
 class EvaSim:
-    def __init__(self, name = "none", step_execution = False):
+    def __init__(self, sim_api_controller : SIM_APIController, api_sim_controller : API_SIMController, name : str = "none", step_execution = False):
         global TTS_IBM_WATSON, ROBOT_MODE_ENABLED
 
         self.name = name
@@ -172,11 +173,14 @@ class EvaSim:
         # Eva memory
         self.memory = EvaMemory() 
 
-        self.state_controller = StateController()
+        self.sim_api_controller = sim_api_controller
+        self.api_sim_controller = api_sim_controller
 
         # Activate step-by-step execution
         self.exec_comand_event = threading.Event()
+        self.input_event = threading.Event()
         self.step_execution = step_execution
+        self.isWaitingInput = False
 
 
     def init_sim(self, root : Tk):
@@ -714,6 +718,14 @@ class EvaSim:
             return False
         self.exec_comand_event.set()
         return True 
+    
+    def trigger_input_event(self):
+        self.input_event.set()
+
+    def set_waiting_input(self):
+        self.isWaitingInput = True
+    def clear_waiting_input(self):
+        self.isWaitingInput = False
 
     # Virtual machine functions
     # Execute the commands
@@ -736,26 +748,26 @@ class EvaSim:
             if node.get("left-arm") != None: # Move the left arm
                 self.gui.terminal.insert(INSERT, "\nSTATE: Moving the left arm! Movement type => " + node.attrib["left-arm"], "motion")
 
-                self.state_controller.command_motion("left-arm", node.attrib["left-arm"])
+                self.sim_api_controller.command_motion("left-arm", node.attrib["left-arm"])
                 
                 self.gui.terminal.see(tkinter.END)
             if node.get("right-arm") != None: # Move the right arm
                 self.gui.terminal.insert(INSERT, "\nSTATE: Moving the right arm! Movement type => " + node.attrib["right-arm"], "motion")
 
-                self.state_controller.command_motion("right-arm", node.attrib["right-arm"])
+                self.sim_api_controller.command_motion("right-arm", node.attrib["right-arm"])
 
                 self.gui.terminal.see(tkinter.END)
             if node.get("head") != None: # Move head with the new format (<head> element)
                     self.gui.terminal.insert(INSERT, "\nSTATE: Moving the head! Movement type => " + node.attrib["head"], "motion")
 
-                    self.state_controller.command_motion("head", node.attrib["head"])
+                    self.sim_api_controller.command_motion("head", node.attrib["head"])
 
                     self.gui.terminal.see(tkinter.END)
             else: # Check if the old version was used
                 if node.get("type") != None: # Maintaining compatibility with the old version of the motion element
                     self.gui.terminal.insert(INSERT, "\nSTATE: Moving the head! Movement type => " + node.attrib["type"], "motion")
 
-                    self.state_controller.command_motion("type", node.attrib["type"])
+                    self.sim_api_controller.command_motion("type", node.attrib["type"])
 
                     self.gui.terminal.see(tkinter.END)
             print("Moving the head and/or the arms.")
@@ -812,8 +824,9 @@ class EvaSim:
         elif node.tag == "wait":
             duration = node.attrib["duration"]
             self.gui.terminal.insert(INSERT, "\nSTATE: Pausing. Duration = " + duration + " ms")
+            self.sim_api_controller.command_wait(int(duration))
             self.gui.terminal.see(tkinter.END)
-            time.sleep(int(duration)/1000) # Convert to seconds
+            # time.sleep(int(duration)/1000) # Convert to seconds
     
     
         elif node.tag == "led":
@@ -869,101 +882,41 @@ class EvaSim:
             else:
                 language_for_listen =  node.attrib["language"]
     
-            if self.RUNNING_MODE == "EVA_ROBOT": 
-                self.client.publish(self.topic_base + "/log", "EVA is listening...")
-                self.EVA_ROBOT_STATE = "BUSY"
-                self.ledAnimation("LISTEN")
-                self.client.publish(self.topic_base + "/listen", language_for_listen)
-    
-                while (self.EVA_ROBOT_STATE != "FREE"):
-                    pass
-                
-                if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    self.memory.var_dolar.append([self.EVA_DOLLAR, "<listen>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): var = $" + ", value = " + self.memory.var_dolar[-1][0])
+           
+            self.lock_thread_pop()
+            self.ledAnimation("LISTEN")
+            
+            self.sim_api_controller.command_listen()
+            self.set_waiting_input()
+            self.input_event.wait()
+            self.input_event.clear()
+            self.clear_waiting_input()
+
+            # Window (self.gui) creation
+            var = StringVar()
+            var.set(self.api_sim_controller.get_input())
+            if node.get("var") == None: # Maintains compatibility with the use of the $ variable
+                    self.memory.var_dolar.append([var.get(), "<listen>"])
+                    self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + ">: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
-                    self.ledAnimation("STOP")
-                    
-                else:
-                    var_name = node.attrib["var"]
-                    self.memory.vars[var_name] = self.EVA_DOLLAR
-                    print("Eva ram => ", self.memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
-                    self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                    self.gui.terminal.see(tkinter.END)
-                    print("Listen command USING VAR...")
-                    self.ledAnimation("STOP")
-    
+                    self.unlock_thread_pop() # Reactivate the script processing thread
             else:
-                self.lock_thread_pop()
-                self.ledAnimation("LISTEN")
-                # Pop up window closing function for the <return> key)
-                def fechar_pop_ret(s): 
-                    print(var.get())
-                    if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                        self.memory.var_dolar.append([var.get(), "<listen>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                        self.tab_load_mem_dollar()
-                        self.gui.terminal.see(tkinter.END)
-                        pop.destroy()
-                        self.unlock_thread_pop() # Reactivate the script processing thread
-                    else:
-                        var_name = node.attrib["var"]
-                        self.memory.vars[var_name] = var.get()
-                        print("Eva ram => ", self.memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): (using the user variable '" + var_name + "'): " + var.get())
-                        self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                        self.gui.terminal.see(tkinter.END)
-                        print("Listen command USING VAR...")
-                        pop.destroy()
-                        self.unlock_thread_pop() # Reactivate the script processing thread
+                var_name = node.attrib["var"]
+                self.memory.vars[var_name] = var.get()
+                print("Eva ram => ", self.memory.vars)
+                self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): (using the user variable '" + var_name + "'): " + var.get())
+                self.tab_load_mem_vars() # Enter data from variable memory into the var table
+                self.gui.terminal.see(tkinter.END)
+                print("Listen command USING VAR...")
+                self.unlock_thread_pop() # Reactivate the script processing thread
                 
-                # Pop up window closing function for OK button
-                def fechar_pop_bt(): 
-                    print(var.get())
-                    if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                        self.memory.var_dolar.append([var.get(), "<listen>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + ">: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                        self.tab_load_mem_dollar()
-                        self.gui.terminal.see(tkinter.END)
-                        pop.destroy()
-                        self.unlock_thread_pop() # Reactivate the script processing thread
-                    else:
-                        var_name = node.attrib["var"]
-                        self.memory.vars[var_name] = var.get()
-                        print("Eva ram => ", self.memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): (using the user variable '" + var_name + "'): " + var.get())
-                        self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                        self.gui.terminal.see(tkinter.END)
-                        print("Listen command USING VAR...")
-                        pop.destroy()
-                        self.unlock_thread_pop() # Reactivate the script processing thread
-                    
-                # Window (self.gui) creation
-                var = StringVar()
-                pop = Toplevel(self.gui)
-                pop.title("Listen Command")
-                # Disable the maximize and close buttons
-                pop.resizable(False, False)
-                pop.protocol("WM_DELETE_WINDOW", False)
-                w = 450
-                h = 150
-                ws = self.gui.winfo_screenwidth()
-                hs = self.gui.winfo_screenheight()
-                x = (ws/2) - (w/2)
-                y = (hs/2) - (h/2)  
-                pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
-                label = Label(pop, text="Eva is listening (language -> " + language_for_listen + ")... Please, enter your answer!", font = ('Arial', 10))
-                label.pack(pady=20)
-                E1 = Entry(pop, textvariable = var, font = ('Arial', 10))
-                E1.bind("<Return>", fechar_pop_ret)
-                E1.pack()
-                Button(pop, text="    OK    ", font = self.font1, command=fechar_pop_bt).pack(pady=20)
-                # Wait for release, waiting for the user's response
-                while self.thread_pop_pause: 
-                    time.sleep(0.5)
-                self.ledAnimation("STOP")
+            # Wait for release, waiting for the user's response
+            while self.thread_pop_pause: 
+                time.sleep(0.5)
+            self.ledAnimation("STOP")
+
+            print("WAITING + " + str(self.isWaitingInput))
     
     
         elif node.tag == "talk": # Blocking function
@@ -1021,7 +974,7 @@ class EvaSim:
             ind_random = rnd.randint(0, len(texto)-1)
             self.gui.terminal.insert(INSERT, '\nSTATE: Speaking: "' + texto[ind_random] + '"')
             
-            self.state_controller.command_talk(texto[ind_random])
+            self.sim_api_controller.command_talk(texto[ind_random])
 
             self.gui.terminal.see(tkinter.END)
     
@@ -1041,7 +994,7 @@ class EvaSim:
                     self.gui.option_add('*Dialog.msg.width', 30)
                     self.gui.option_add('*Dialog.msg.font', 'Arial 14')
                     self.lock_thread_pop()
-                    messagebox.showinfo("TTS - Message Box - EVA is speaking!", texto[ind_random])
+                    # messagebox.showinfo("TTS - Message Box - EVA is speaking!", texto[ind_random])
                     self.unlock_thread_pop() # Reactivate the script processing thread
     
                 elif TTS_IBM_WATSON:
@@ -1851,7 +1804,7 @@ class EvaSim:
         if self.step_execution: 
             self.exec_comand_event.clear()
 
-        self.state_controller.trigger_event()
+        self.sim_api_controller.trigger_event()
 
     def busca_commando(self, key : str): # The keys are strings
         # Search in settings. This is because "voice" is in settings and voice is always the first element
@@ -1919,7 +1872,7 @@ class EvaSim:
                     self.exec_comando(self.busca_commando(to_key))
                     print("End of block.")
         
-        self.state_controller.command_end()
+        self.sim_api_controller.command_end()
 
         self.gui.terminal.insert(INSERT, "\nSTATE: End of script.")
         self.gui.terminal.see(tkinter.END)
