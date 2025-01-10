@@ -10,7 +10,11 @@ class API_SIMController:
         eva_sim.importfile_API(fileName)
 
     def startSim(self, eva_sim):
+        if eva_sim.script_file == "":
+            return False
+        
         eva_sim.setSimMode(None)
+        return True
 
     def stopSim(self, eva_sim):
         eva_sim.stopScript(None)

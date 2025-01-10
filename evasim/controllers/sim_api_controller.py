@@ -5,6 +5,8 @@ class Commands(str, Enum):
     MOTION = "Motion"
     TALK = "Talk"
     WAIT = "Wait"
+    LISTEN = "Listen"
+    LED_ANIM = "Led_animation"
     END = "End of script"
 
 class SIM_APIController:
@@ -38,22 +40,21 @@ class SIM_APIController:
                 command["type"] = detail
 
         self.current_command.update(command)
-        self.trigger_event()
 
     def command_talk(self, text : str):
         command = {"command" : Commands.TALK.value}
         command["text"] = text
         self.current_command.update(command)
-        self.trigger_event()
 
     def command_end(self):
         self.current_command.update({"command" : Commands.END})
-        self.trigger_event()
 
     def command_wait(self, ms : int):
         self.current_command.update({"command":Commands.WAIT, "time":ms})
-        self.trigger_event()
 
     def command_listen(self):
         self.current_command.update({"command":"Listen", "state":"waiting input"})
         self.trigger_event()
+
+    def command_led_animation(self, color : str):
+        self.current_command.update({"command": Commands.LED_ANIM, "color":color})

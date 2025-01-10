@@ -43,7 +43,8 @@ def start(id : str):
     if c.eva_sim.play:
         return {"status":"script is already playing"}
     
-    c.api_sim.startSim(c.eva_sim)
+    if not c.api_sim.startSim(c.eva_sim):
+        return {"error":"no file imported"}
     return {"status":"success"}
 
 @router.post("/next/{id}")
@@ -69,7 +70,7 @@ def send_input(id:str, input : InputModel):
     
     if c.eva_sim.isWaitingInput:
         c.api_sim.send_input(c.eva_sim, input.input)
-        # return {"status": "success"}
+        return {"status": "success"}
     else:
         return {"status":"not waiting input"}
 

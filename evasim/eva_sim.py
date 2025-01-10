@@ -631,29 +631,31 @@ class EvaSim:
 
     # Led "animations"
     def ledAnimation(self, animation):
-        if self.RUNNING_MODE == "EVA_ROBOT":
-            self.client.publish(self.topic_base + "/leds", "STOP")
-            self.client.publish(self.topic_base + "/leds", animation)
         if animation == "STOP":
+            self.sim_api_controller.command_led_animation("grey")
             self.evaMatrix("grey")
-        elif animation == "LISTEN":
+        elif animation in ("LISTEN", "HAPPY"):
+            self.sim_api_controller.command_led_animation("green")
             self.evaMatrix("green")
-        elif animation == "SPEAK":
+        elif animation in ("SPEAK", "SAD"):
+            self.sim_api_controller.command_led_animation("blue")
             self.evaMatrix("blue")
-        elif animation == "ANGRY" or animation == "ANGRY2":
+        elif animation in ("ANGRY", "ANGRY2"):
+            self.sim_api_controller.command_led_animation("red")
             self.evaMatrix("red")
-        elif animation == "HAPPY":
-            self.evaMatrix("green")
-        elif animation == "SAD":
-            self.evaMatrix("blue")
         elif animation == "SURPRISE":
+            self.sim_api_controller.command_led_animation("yellow")
             self.evaMatrix("yellow")
         elif animation == "WHITE":
+            self.sim_api_controller.command_led_animation("white")
             self.evaMatrix("white")
         elif animation == "RAINBOW":
+            self.sim_api_controller.command_led_animation("rainbow")
             self.evaMatrix("white")
             print("Falta gerar a imagem do RAINBOW para os leds do EvaSIM")
-        else: print("A wrong led animation was selected.")
+        else: 
+            self.sim_api_controller.command_led_animation("NULL")
+            print("A wrong led animation was selected.")
 
 
     # Set the Eva emotion
@@ -727,761 +729,739 @@ class EvaSim:
     def clear_waiting_input(self):
         self.isWaitingInput = False
 
-    # Virtual machine functions
-    # Execute the commands
-    def exec_comando(self, node):
-        global img_neutral, img_happy, img_angry, img_sad, img_surprise
-        
-        # Clear event at the end of the function
-        if self.step_execution: 
-            self.exec_comand_event.wait()
-
-        if node.tag == "voice":
-            self.gui.terminal.insert(INSERT, "\nSTATE: Selected Voice => " + node.attrib["tone"])
-            self.gui.terminal.see(tkinter.END)
-            self.gui.terminal.insert(INSERT, "\nTIP: If the <talk> command doesn't speak some text, try emptying the audio_cache_files folder", "tip")
-            if self.RUNNING_MODE == "EVA_ROBOT":
-                self.client.publish(self.topic_base + "/log", "Using the voice: " + node.attrib["tone"]) # 
-    
-    
-        if node.tag == "motion": # Movement of the head and arms
-            if node.get("left-arm") != None: # Move the left arm
+    def command_motion(self, node):
+        if node.get("left-arm") != None: # Move the left arm
                 self.gui.terminal.insert(INSERT, "\nSTATE: Moving the left arm! Movement type => " + node.attrib["left-arm"], "motion")
 
                 self.sim_api_controller.command_motion("left-arm", node.attrib["left-arm"])
                 
                 self.gui.terminal.see(tkinter.END)
-            if node.get("right-arm") != None: # Move the right arm
-                self.gui.terminal.insert(INSERT, "\nSTATE: Moving the right arm! Movement type => " + node.attrib["right-arm"], "motion")
-
-                self.sim_api_controller.command_motion("right-arm", node.attrib["right-arm"])
-
+        if node.get("right-arm") != None: # Move the right arm
+            self.gui.terminal.insert(INSERT, "\nSTATE: Moving the right arm! Movement type => " + node.attrib["right-arm"], "motion")
+            self.sim_api_controller.command_motion("right-arm", node.attrib["right-arm"])
+            self.gui.terminal.see(tkinter.END)
+        if node.get("head") != None: # Move head with the new format (<head> element)
+                self.gui.terminal.insert(INSERT, "\nSTATE: Moving the head! Movement type => " + node.attrib["head"], "motion")
+                self.sim_api_controller.command_motion("head", node.attrib["head"])
                 self.gui.terminal.see(tkinter.END)
+        else: # Check if the old version was used
+            if node.get("type") != None: # Maintaining compatibility with the old version of the motion element
+                self.gui.terminal.insert(INSERT, "\nSTATE: Moving the head! Movement type => " + node.attrib["type"], "motion")
+                self.sim_api_controller.command_motion("type", node.attrib["type"])
+                self.gui.terminal.see(tkinter.END)
+        print("Moving the head and/or the arms.")
+        if self.RUNNING_MODE == "EVA_ROBOT":
+            if node.get("left-arm") != None: # Move the left arm
+                self.client.publish(self.topic_base + "/motion/arm/left", node.attrib["left-arm"]); # comando para o robô físico
+            if node.get("right-arm") != None:  # Move the right arm
+                self.client.publish(self.topic_base + "/motion/arm/right", node.attrib["right-arm"]); # comando para o robô físico
             if node.get("head") != None: # Move head with the new format (<head> element)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: Moving the head! Movement type => " + node.attrib["head"], "motion")
-
-                    self.sim_api_controller.command_motion("head", node.attrib["head"])
-
-                    self.gui.terminal.see(tkinter.END)
+                    self.client.publish(self.topic_base + "/motion/head", node.attrib["head"]); # Command for the physical robot
+                    time.sleep(0.2) # This pause is necessary for arm commands to be received via the serial port
             else: # Check if the old version was used
-                if node.get("type") != None: # Maintaining compatibility with the old version of the motion element
-                    self.gui.terminal.insert(INSERT, "\nSTATE: Moving the head! Movement type => " + node.attrib["type"], "motion")
+                if node.get("type") != None: # Maintaining compatibility with the old version of the motion element    
+                    self.client.publish(self.topic_base + "/motion/head", node.attrib["type"]); # Command for the physical robot
+                    time.sleep(0.2) # This pause is necessary for arm commands to be received via the serial port
+        else:
+            time.sleep(0.1) # A symbolic time. In the robot, the movement does not block the script and takes different times
+    
+    def command_voice(self, node):
+        self.gui.terminal.insert(INSERT, "\nSTATE: Selected Voice => " + node.attrib["tone"])
+        self.gui.terminal.see(tkinter.END)
+        self.gui.terminal.insert(INSERT, "\nTIP: If the <talk> command doesn't speak some text, try emptying the audio_cache_files folder", "tip")
+        if self.RUNNING_MODE == "EVA_ROBOT":
+            self.client.publish(self.topic_base + "/log", "Using the voice: " + node.attrib["tone"]) # 
 
-                    self.sim_api_controller.command_motion("type", node.attrib["type"])
+    def command_light(self, node):
+        lightEffect = "ON"
+        state = node.attrib["state"]
+        # Process light Effects settings
+        if self.root.find("settings").find("lightEffects") != None:
+            if self.root.find("settings").find("lightEffects").attrib["mode"] == "OFF":
+                lightEffect = "OFF"
+        
+        # Following case, if the state is off, and may not have a color attribute defined
+        if state == "OFF":
+            color = "BLACK"
+            if lightEffect == "OFF":
+                message_state = "\nSTATE: Light Effects DISABLED."
+            else:
+                message_state = "\nSTATE: Turnning off the light."
+            self.gui.terminal.insert(INSERT, message_state)
+            self.gui.terminal.see(tkinter.END)
+        else:
+            color = node.attrib["color"]
+            if lightEffect == "OFF":
+                message_state = "\nSTATE: Light Effects DISABLED."
+                state = "OFF"
+            else:
+                message_state = "\nSTATE: Turnning on the light. Color = " + color + "."
+            self.gui.terminal.insert(INSERT, message_state)
+            self.gui.terminal.see(tkinter.END) # Autoscrolling
+        self.light(color , state)
 
-                    self.gui.terminal.see(tkinter.END)
-            print("Moving the head and/or the arms.")
-            if self.RUNNING_MODE == "EVA_ROBOT":
-                if node.get("left-arm") != None: # Move the left arm
-                    self.client.publish(self.topic_base + "/motion/arm/left", node.attrib["left-arm"]); # comando para o robô físico
-                if node.get("right-arm") != None:  # Move the right arm
-                    self.client.publish(self.topic_base + "/motion/arm/right", node.attrib["right-arm"]); # comando para o robô físico
-                if node.get("head") != None: # Move head with the new format (<head> element)
-                        self.client.publish(self.topic_base + "/motion/head", node.attrib["head"]); # Command for the physical robot
-                        time.sleep(0.2) # This pause is necessary for arm commands to be received via the serial port
-                else: # Check if the old version was used
-                    if node.get("type") != None: # Maintaining compatibility with the old version of the motion element    
-                        self.client.publish(self.topic_base + "/motion/head", node.attrib["type"]); # Command for the physical robot
-                        time.sleep(0.2) # This pause is necessary for arm commands to be received via the serial port
-            else:
-                time.sleep(0.1) # A symbolic time. In the robot, the movement does not block the script and takes different times
+        if self.RUNNING_MODE == "EVA_ROBOT":
+            self.client.publish(self.topic_base + "/light", color + "|" + state); # Command for the physical robot
+        else:
+            time.sleep(0.1) # Emulates real bulb response time
+   
+    def command_wait(self, node):
+        duration = node.attrib["duration"]
+        self.gui.terminal.insert(INSERT, "\nSTATE: Pausing. Duration = " + duration + " ms")
+        self.sim_api_controller.command_wait(int(duration))
+        self.gui.terminal.see(tkinter.END)
+        # time.sleep(int(duration)/1000) # Convert to seconds
+
+    def command_led(self, node):
+        # Selection of the execution mode is done within the ledAnimation() function
+        self.ledAnimation(node.attrib["animation"])
+        self.gui.terminal.insert(INSERT, "\nSTATE: Matrix Leds. Animation = " + node.attrib["animation"])
+        self.gui.terminal.see(tkinter.END) 
     
-    
-        elif node.tag == "light":
-            lightEffect = "ON"
-            state = node.attrib["state"]
-            # Process light Effects settings
-            if self.root.find("settings").find("lightEffects") != None:
-                if self.root.find("settings").find("lightEffects").attrib["mode"] == "OFF":
-                    lightEffect = "OFF"
-            
-            # Following case, if the state is off, and may not have a color attribute defined
-            if state == "OFF":
-                color = "BLACK"
-                if lightEffect == "OFF":
-                    message_state = "\nSTATE: Light Effects DISABLED."
-                else:
-                    message_state = "\nSTATE: Turnning off the light."
-                self.gui.terminal.insert(INSERT, message_state)
-                self.gui.terminal.see(tkinter.END)
-            else:
-                color = node.attrib["color"]
-                if lightEffect == "OFF":
-                    message_state = "\nSTATE: Light Effects DISABLED."
-                    state = "OFF"
-                else:
-                    message_state = "\nSTATE: Turnning on the light. Color = " + color + "."
-                self.gui.terminal.insert(INSERT, message_state)
-                self.gui.terminal.see(tkinter.END) # Autoscrolling
-            self.light(color , state)
-    
-            if self.RUNNING_MODE == "EVA_ROBOT":
-                self.client.publish(self.topic_base + "/light", color + "|" + state); # Command for the physical robot
-            else:
-                time.sleep(0.1) # Emulates real bulb response time
-    
-    
-        elif node.tag == "wait":
-            duration = node.attrib["duration"]
-            self.gui.terminal.insert(INSERT, "\nSTATE: Pausing. Duration = " + duration + " ms")
-            self.sim_api_controller.command_wait(int(duration))
+    def command_mqtt(self, node):
+        mqtt_topic = node.attrib["topic"]
+        mqtt_message = node.attrib["message"]
+        if (len(mqtt_topic) or len(mqtt_message)) == 0: # erro
+            self.gui.terminal.insert(INSERT, "\nError -> The topic or message attribute is empty.")
             self.gui.terminal.see(tkinter.END)
-            # time.sleep(int(duration)/1000) # Convert to seconds
-    
-    
-        elif node.tag == "led":
-            # Selection of the execution mode is done within the ledAnimation() function
-            self.ledAnimation(node.attrib["animation"])
-            self.gui.terminal.insert(INSERT, "\nSTATE: Matrix Leds. Animation = " + node.attrib["animation"])
+            exit(1)
+        else:
+            self.client.publish(mqtt_topic, mqtt_message)
+            print("Publishing a MQTT message to an external device.", mqtt_topic, mqtt_message)
+            self.gui.terminal.insert(INSERT, "\nSTATE: MQTT publishing. Topic = " + mqtt_topic + " and Message = " + mqtt_message + ".")
             self.gui.terminal.see(tkinter.END)
-            
+
+    def command_random(self, node):
+        min = node.attrib["min"]
+        max = node.attrib["max"]
+        # Check if min <= max
+        if (int(min) > int(max)):
+            self.gui.terminal.insert(INSERT, "\nError -> The 'min' attribute of the random command must be less than or equal to the 'max' attribute. Please, check your code.", "error")
+            self.gui.terminal.see(tkinter.END)
+            exit(1)
+
+        if node.get("var") == None: # Maintains compatibility with the use of the $ variable
+            self.memory.var_dolar.append([str(rnd.randint(int(min), int(max))), "<random>"])
+            self.gui.terminal.insert(INSERT, "\nSTATE: Generating a random number (using the variable $): " + self.memory.var_dolar[-1][0])
+            self.tab_load_mem_dollar()
+            self.gui.terminal.see(tkinter.END)
+            print("random command, min = " + min + ", max = " + max + ", valor = " + self.memory.var_dolar[-1][0])
+        else:
+            var_name = node.attrib["var"]
+            self.memory.vars[var_name] = str(rnd.randint(int(min), int(max)))
+            print("Eva ram => ", self.memory.vars)
+            self.gui.terminal.insert(INSERT, "\nSTATE: Generating a random number (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
+            self.tab_load_mem_vars() # Enter data from variable memory into the var table
+            self.gui.terminal.see(tkinter.END)
+            print("random command USING VAR, min = " + min + ", max = " + max + ", valor = ")
     
-        elif node.tag == "mqtt":
-            mqtt_topic = node.attrib["topic"]
-            mqtt_message = node.attrib["message"]
-            if (len(mqtt_topic) or len(mqtt_message)) == 0: # erro
-                self.gui.terminal.insert(INSERT, "\nError -> The topic or message attribute is empty.")
-                self.gui.terminal.see(tkinter.END)
-                exit(1)
-            else:
-                self.client.publish(mqtt_topic, mqtt_message)
-                print("Publishing a MQTT message to an external device.", mqtt_topic, mqtt_message)
-                self.gui.terminal.insert(INSERT, "\nSTATE: MQTT publishing. Topic = " + mqtt_topic + " and Message = " + mqtt_message + ".")
-                self.gui.terminal.see(tkinter.END)
-    
-    
-        elif node.tag == "random":
-            min = node.attrib["min"]
-            max = node.attrib["max"]
-            # Check if min <= max
-            if (int(min) > int(max)):
-                self.gui.terminal.insert(INSERT, "\nError -> The 'min' attribute of the random command must be less than or equal to the 'max' attribute. Please, check your code.", "error")
-                self.gui.terminal.see(tkinter.END)
-                exit(1)
-    
-            if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                self.memory.var_dolar.append([str(rnd.randint(int(min), int(max))), "<random>"])
-                self.gui.terminal.insert(INSERT, "\nSTATE: Generating a random number (using the variable $): " + self.memory.var_dolar[-1][0])
+    def command_listen(self, node):
+        if node.get("language") == None: # Maintains compatibility with the use of <listen> in old scripts
+            # It will be used the default value defined in config.py file
+            language_for_listen = config.LANG_DEFAULT_SPEECH_RECOGNITION
+        else:
+            language_for_listen =  node.attrib["language"]
+
+        
+        self.lock_thread_pop()
+        self.ledAnimation("LISTEN")
+        
+        self.sim_api_controller.command_listen()
+        self.set_waiting_input()
+        self.input_event.wait()
+        self.input_event.clear()
+        self.clear_waiting_input()
+        # Window (self.gui) creation
+        var = StringVar()
+        var.set(self.api_sim_controller.get_input())
+        if node.get("var") == None: # Maintains compatibility with the use of the $ variable
+                self.memory.var_dolar.append([var.get(), "<listen>"])
+                self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + ">: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                 self.tab_load_mem_dollar()
                 self.gui.terminal.see(tkinter.END)
-                print("random command, min = " + min + ", max = " + max + ", valor = " + self.memory.var_dolar[-1][0])
-            else:
-                var_name = node.attrib["var"]
-                self.memory.vars[var_name] = str(rnd.randint(int(min), int(max)))
-                print("Eva ram => ", self.memory.vars)
-                self.gui.terminal.insert(INSERT, "\nSTATE: Generating a random number (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                self.gui.terminal.see(tkinter.END)
-                print("random command USING VAR, min = " + min + ", max = " + max + ", valor = ")
-    
-    
-        elif node.tag == "listen":
-            if node.get("language") == None: # Maintains compatibility with the use of <listen> in old scripts
-                # It will be used the default value defined in config.py file
-                language_for_listen = config.LANG_DEFAULT_SPEECH_RECOGNITION
-            else:
-                language_for_listen =  node.attrib["language"]
-    
-           
-            self.lock_thread_pop()
-            self.ledAnimation("LISTEN")
-            
-            self.sim_api_controller.command_listen()
-            self.set_waiting_input()
-            self.input_event.wait()
-            self.input_event.clear()
-            self.clear_waiting_input()
-
-            # Window (self.gui) creation
-            var = StringVar()
-            var.set(self.api_sim_controller.get_input())
-            if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    self.memory.var_dolar.append([var.get(), "<listen>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + ">: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                    self.tab_load_mem_dollar()
-                    self.gui.terminal.see(tkinter.END)
-                    self.unlock_thread_pop() # Reactivate the script processing thread
-            else:
-                var_name = node.attrib["var"]
-                self.memory.vars[var_name] = var.get()
-                print("Eva ram => ", self.memory.vars)
-                self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): (using the user variable '" + var_name + "'): " + var.get())
-                self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                self.gui.terminal.see(tkinter.END)
-                print("Listen command USING VAR...")
                 self.unlock_thread_pop() # Reactivate the script processing thread
-                
-            # Wait for release, waiting for the user's response
-            while self.thread_pop_pause: 
-                time.sleep(0.5)
-            self.ledAnimation("STOP")
-
-            print("WAITING + " + str(self.isWaitingInput))
-    
-    
-        elif node.tag == "talk": # Blocking function
-            if node.text == None: # There is no text to speech
-                print("There is no text to speech in the element <talk>.")
-                self.gui.terminal.insert(INSERT, "\nError -> There is no text to speech in the element <talk>. Please, check your code.", "error")
-                self.gui.terminal.see(tkinter.END)
-                exit(1)
-    
-            texto = node.text
-            # Replace variables throughout the text. variables must exist in memory
-            if "#" in texto:
-                # Checks if the robot's memory (vars) is empty
-                if self.memory.vars == {}:
-                    self.gui.terminal.insert(INSERT, "\nError -> No variables have been defined. Please, check your code.", "error")
-                    self.gui.terminal.see(tkinter.END)
-                    exit(1)
-    
-                var_list = re.findall(r'\#[a-zA-Z]+[0-9]*', texto) # Generate list of occurrences of vars (#...)
-                for v in var_list:
-                    if v[1:] in self.memory.vars:
-                        texto = texto.replace(v, str(self.memory.vars[v[1:]]))
-                    else:
-                        # If the variable does not exist in the robot's memory, it disself.plays an error message
-                        print("================================")
-                        error_string = "\nError -> The variable #" + v[1:] + " has not been declared. Please, check your code."
-                        self.gui.terminal.insert(INSERT, error_string, "error")
-                        self.gui.terminal.see(tkinter.END)
-                        exit(1)
-    
-            # This part replaces the $, or the $-1 or the $1 in the text
-            if "$" in texto: # Check if there is $ in the text
-                # Checks if var_dollar has any value in the robot's memory
-                if (len(self.memory.var_dolar)) == 0:
-                    self.gui.terminal.insert(INSERT, "\nError-> The variable $ has no value. Please, check your code.", "error")
-                    self.gui.terminal.see(tkinter.END)
-                    exit(1)
-                else: # Find the patterns $ $n or $-n in the string and replace with the corresponding values
-                    dollars_list = re.findall(r'\$[-0-9]*', texto) # Find dollar patterns and return a list of occurrences
-                    dollars_list = sorted(dollars_list, key=len, reverse=True) # Sort the list in descending order of length (of the element)
-                    for var_dollar in dollars_list:
-                        if len(var_dollar) == 1: # Is the dollar ($)
-                            texto = texto.replace(var_dollar, self.memory.var_dolar[-1][0])
-                        else: # May be of type $n or $-n
-                            if "-" in var_dollar: # $-n type
-                                indice = int(var_dollar[2:]) # Var dollar is of type $-n. then just take n and convert it to int
-                                texto = texto.replace(var_dollar, self.memory.var_dolar[-(indice + 1)][0]) 
-                            else: # tipo $n
-                                indice = int(var_dollar[1:]) # Var dollar is of type $n. then just take n and convert it to int
-                                texto = texto.replace(var_dollar, self.memory.var_dolar[(indice - 1)][0])
-                
-            # This part implements the random text generated by using the / character
-            texto = texto.split(sep="/") # Text becomes a list with the number of sentences divided by character. /
-            print(texto)
-            ind_random = rnd.randint(0, len(texto)-1)
-            self.gui.terminal.insert(INSERT, '\nSTATE: Speaking: "' + texto[ind_random] + '"')
+        else:
+            var_name = node.attrib["var"]
+            self.memory.vars[var_name] = var.get()
+            print("Eva ram => ", self.memory.vars)
+            self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + "): (using the user variable '" + var_name + "'): " + var.get())
+            self.tab_load_mem_vars() # Enter data from variable memory into the var table
+            self.gui.terminal.see(tkinter.END)
+            print("Listen command USING VAR...")
+            self.unlock_thread_pop() # Reactivate the script processing thread
             
-            self.sim_api_controller.command_talk(texto[ind_random])
+        # Wait for release, waiting for the user's response
+        while self.thread_pop_pause: 
+            time.sleep(0.5)
+        # self.ledAnimation("STOP")
 
+    def command_talk(self, node):
+        if node.text == None: # There is no text to speech
+            print("There is no text to speech in the element <talk>.")
+            self.gui.terminal.insert(INSERT, "\nError -> There is no text to speech in the element <talk>. Please, check your code.", "error")
             self.gui.terminal.see(tkinter.END)
-    
-            if self.RUNNING_MODE == "EVA_ROBOT":
-                self.client.publish(self.topic_base + "/log", "EVA will try to speak a text: " + texto[ind_random])
-                self.ledAnimation("SPEAK")
-                self.EVA_ROBOT_STATE = "BUSY" # Speech is a blocking function. the robot is busy
-                if node.get("tone") == None: # Usuario não selecionou a voz no talk. A opção global será utilizada
-                    self.client.publish(self.topic_base + "/talk", self.root.find("settings")[0].attrib["tone"] + "|" + texto[ind_random])
-                else:
-                    self.client.publish(self.topic_base + "/talk", node.attrib["tone"] + "|" + texto[ind_random]) # voz selecionado em talk será utilizada
-                while(self.EVA_ROBOT_STATE != "FREE"):
-                    pass
-                self.ledAnimation("STOP")
-            else:
-                if not TTS_IBM_WATSON: # without IBM-Watson
-                    self.gui.option_add('*Dialog.msg.width', 30)
-                    self.gui.option_add('*Dialog.msg.font', 'Arial 14')
-                    self.lock_thread_pop()
-                    # messagebox.showinfo("TTS - Message Box - EVA is speaking!", texto[ind_random])
-                    self.unlock_thread_pop() # Reactivate the script processing thread
-    
-                elif TTS_IBM_WATSON:
-                    # Using IBM Watson ################################
-                    # Assume the default UTF-8 (Generates the hashing of the audio file)
-                    # Also, uses the voice tone attribute in file hashing
-                    if node.get("tone") == None: # Usuario não selecionou a voz no talk. A opção global será utilizada
-                        tone_voice = self.root.find("settings")[0].attrib["tone"]
-                    else:
-                        tone_voice = node.attrib["tone"]
-    
-                    hash_object = hashlib.md5(texto[ind_random].encode())
-                    file_name = "_audio_"  + tone_voice + hash_object.hexdigest()
-    
-                    # Checks if the speech audio already exists in the folder
-                    if not (os.path.isfile("audio_cache_files/" + file_name + self.audio_ext)): # If it doesn't exist, call Watson
-                        audio_file_is_ok = False
-                        while(not audio_file_is_ok):
-                            # Eva TTS functions
-                            with open("audio_cache_files/" + file_name + self.audio_ext, 'wb') as audio_file:
-                                try:
-                                    res = self.tts.synthesize(texto[ind_random], accept = self.ibm_audio_ext, voice = tone_voice).get_result()
-                                    audio_file.write(res.content)
-                                    self.playsound("audio_cache_files/" + file_name + self.audio_ext, block = True) # self.play the audio of the speech
-                                except:
-                                    print("Voice exception")
-                                    self.gui.terminal.insert(INSERT, "\nError when trying to select voice tone, please verify the tone atribute.\n", "error")
-                                    self.gui.terminal.see(tkinter.END)
-                                    exit(1)
-                            file_size = os.path.getsize("audio_cache_files/" + file_name + self.audio_ext)
-                            if file_size == 0: # Corrupted file
-                                print("#### Corrupted file.. (It's necessary to use the same implementation like in tts-module in EVA robot!)")
-                                os.remove("audio_cache_files/" + file_name + self.audio_ext)
-                            else:
-                                audio_file_is_ok = True
-                    else:
-                        self.playsound("audio_cache_files/" + file_name + self.audio_ext, block = True) # self.play the audio of the speech
-                ##############################
-    
-    
-        elif node.tag == "evaEmotion":
-            emotion = node.attrib["emotion"]
-            if self.RUNNING_MODE == "EVA_ROBOT":
-                self.client.publish(self.topic_base + "/evaEmotion", emotion) # Command for physical EVA
-            self.gui.terminal.insert(INSERT, "\nSTATE: Expressing an emotion => " + emotion)
-            self.gui.terminal.see(tkinter.END)
-            self.evaEmotion(emotion)
-    
-    
-        elif node.tag == "audio":
-            sound_file =  node.attrib["source"]
-            block = False # Audio self.play does not block script execution
-            if node.attrib["block"] == "TRUE":
-                block = True
-            message_audio = '\nSTATE: self.playing a sound: "' + "audio_files/" + sound_file + ".wav" + '", block=' + str(block)
-    
-            # Process Audio Effects settings
-            if self.root.find("settings").find("audioEffects") != None:
-                if self.root.find("settings").find("audioEffects").attrib["mode"] == "OFF":
-                    # Mode off implies the use of MUTED-SOUND file 
-                    sound_file = "my_sounds/MUTED-SOUND.wav"
-                    message_audio = "\nSTATE: Audio Effects DISABLED."
-    
-            self.gui.terminal.insert(INSERT, message_audio)
-            self.gui.terminal.see(tkinter.END)
-    
-            try:
-                if block == True:
-                    if self.RUNNING_MODE == "EVA_ROBOT":
-                        self.client.publish(self.topic_base + "/log", "EVA will self.play a sound in blocking mode.")
-                        self.EVA_ROBOT_STATE = "BUSY"
-                        self.client.publish(self.topic_base + "/audio", sound_file + "|" + "TRUE")
-                        while (self.EVA_ROBOT_STATE != "FREE"):
-                            pass
-                    else:
-                        print(sound_file)
-                        self.playsound("audio_files/" + sound_file + ".wav", block = block)
-    
-                else: # Block = False
-                    if self.RUNNING_MODE == "EVA_ROBOT":
-                        self.client.publish(self.topic_base + "/log", "EVA will self.play a sound in no-blocking mode.")
-                        self.client.publish(self.topic_base + "/audio", sound_file + "|" + "FALSE")
-                    else:
-                        self.playsound("audio_files/" + sound_file + ".wav", block = block) 
-            except Exception as e:
-                # Handle an exception. I didn't find any exceptions in the library documentation
-                error_string = "\nError -> " + str(e) + "."
-                self.gui.terminal.insert(INSERT, error_string, "error")
+            exit(1)
+
+        texto = node.text
+        # Replace variables throughout the text. variables must exist in memory
+        if "#" in texto:
+            # Checks if the robot's memory (vars) is empty
+            if self.memory.vars == {}:
+                self.gui.terminal.insert(INSERT, "\nError -> No variables have been defined. Please, check your code.", "error")
                 self.gui.terminal.see(tkinter.END)
                 exit(1)
+
+            var_list = re.findall(r'\#[a-zA-Z]+[0-9]*', texto) # Generate list of occurrences of vars (#...)
+            for v in var_list:
+                if v[1:] in self.memory.vars:
+                    texto = texto.replace(v, str(self.memory.vars[v[1:]]))
+                else:
+                    # If the variable does not exist in the robot's memory, it disself.plays an error message
+                    print("================================")
+                    error_string = "\nError -> The variable #" + v[1:] + " has not been declared. Please, check your code."
+                    self.gui.terminal.insert(INSERT, error_string, "error")
+                    self.gui.terminal.see(tkinter.END)
+                    exit(1)
+
+        # This part replaces the $, or the $-1 or the $1 in the text
+        if "$" in texto: # Check if there is $ in the text
+            # Checks if var_dollar has any value in the robot's memory
+            if (len(self.memory.var_dolar)) == 0:
+                self.gui.terminal.insert(INSERT, "\nError-> The variable $ has no value. Please, check your code.", "error")
+                self.gui.terminal.see(tkinter.END)
+                exit(1)
+            else: # Find the patterns $ $n or $-n in the string and replace with the corresponding values
+                dollars_list = re.findall(r'\$[-0-9]*', texto) # Find dollar patterns and return a list of occurrences
+                dollars_list = sorted(dollars_list, key=len, reverse=True) # Sort the list in descending order of length (of the element)
+                for var_dollar in dollars_list:
+                    if len(var_dollar) == 1: # Is the dollar ($)
+                        texto = texto.replace(var_dollar, self.memory.var_dolar[-1][0])
+                    else: # May be of type $n or $-n
+                        if "-" in var_dollar: # $-n type
+                            indice = int(var_dollar[2:]) # Var dollar is of type $-n. then just take n and convert it to int
+                            texto = texto.replace(var_dollar, self.memory.var_dolar[-(indice + 1)][0]) 
+                        else: # tipo $n
+                            indice = int(var_dollar[1:]) # Var dollar is of type $n. then just take n and convert it to int
+                            texto = texto.replace(var_dollar, self.memory.var_dolar[(indice - 1)][0])
+            
+        # This part implements the random text generated by using the / character
+        texto = texto.split(sep="/") # Text becomes a list with the number of sentences divided by character. /
+        print(texto)
+        ind_random = rnd.randint(0, len(texto)-1)
+        self.gui.terminal.insert(INSERT, '\nSTATE: Speaking: "' + texto[ind_random] + '"')
+        
+        self.sim_api_controller.command_talk(texto[ind_random])
+        self.gui.terminal.see(tkinter.END)
+
+        if self.RUNNING_MODE == "EVA_ROBOT":
+            self.client.publish(self.topic_base + "/log", "EVA will try to speak a text: " + texto[ind_random])
+            self.ledAnimation("SPEAK")
+            self.EVA_ROBOT_STATE = "BUSY" # Speech is a blocking function. the robot is busy
+            if node.get("tone") == None: # Usuario não selecionou a voz no talk. A opção global será utilizada
+                self.client.publish(self.topic_base + "/talk", self.root.find("settings")[0].attrib["tone"] + "|" + texto[ind_random])
+            else:
+                self.client.publish(self.topic_base + "/talk", node.attrib["tone"] + "|" + texto[ind_random]) # voz selecionado em talk será utilizada
+            while(self.EVA_ROBOT_STATE != "FREE"):
+                pass
+            self.ledAnimation("STOP")
+        else:
+            if not TTS_IBM_WATSON: # without IBM-Watson
+                self.gui.option_add('*Dialog.msg.width', 30)
+                self.gui.option_add('*Dialog.msg.font', 'Arial 14')
+                self.lock_thread_pop()
+                # messagebox.showinfo("TTS - Message Box - EVA is speaking!", texto[ind_random])
+                self.unlock_thread_pop() # Reactivate the script processing thread
+
+            elif TTS_IBM_WATSON:
+                # Using IBM Watson ################################
+                # Assume the default UTF-8 (Generates the hashing of the audio file)
+                # Also, uses the voice tone attribute in file hashing
+                if node.get("tone") == None: # Usuario não selecionou a voz no talk. A opção global será utilizada
+                    tone_voice = self.root.find("settings")[0].attrib["tone"]
+                else:
+                    tone_voice = node.attrib["tone"]
+
+                hash_object = hashlib.md5(texto[ind_random].encode())
+                file_name = "_audio_"  + tone_voice + hash_object.hexdigest()
+
+                # Checks if the speech audio already exists in the folder
+                if not (os.path.isfile("audio_cache_files/" + file_name + self.audio_ext)): # If it doesn't exist, call Watson
+                    audio_file_is_ok = False
+                    while(not audio_file_is_ok):
+                        # Eva TTS functions
+                        with open("audio_cache_files/" + file_name + self.audio_ext, 'wb') as audio_file:
+                            try:
+                                res = self.tts.synthesize(texto[ind_random], accept = self.ibm_audio_ext, voice = tone_voice).get_result()
+                                audio_file.write(res.content)
+                                self.playsound("audio_cache_files/" + file_name + self.audio_ext, block = True) # self.play the audio of the speech
+                            except:
+                                print("Voice exception")
+                                self.gui.terminal.insert(INSERT, "\nError when trying to select voice tone, please verify the tone atribute.\n", "error")
+                                self.gui.terminal.see(tkinter.END)
+                                exit(1)
+                        file_size = os.path.getsize("audio_cache_files/" + file_name + self.audio_ext)
+                        if file_size == 0: # Corrupted file
+                            print("#### Corrupted file.. (It's necessary to use the same implementation like in tts-module in EVA robot!)")
+                            os.remove("audio_cache_files/" + file_name + self.audio_ext)
+                        else:
+                            audio_file_is_ok = True
+                else:
+                    self.playsound("audio_cache_files/" + file_name + self.audio_ext, block = True) # self.play the audio of the speech
+            ##############################      
     
+    def command_evaEmotion(self, node):
+        emotion = node.attrib["emotion"]
+        if self.RUNNING_MODE == "EVA_ROBOT":
+            self.client.publish(self.topic_base + "/evaEmotion", emotion) # Command for physical EVA
+        self.gui.terminal.insert(INSERT, "\nSTATE: Expressing an emotion => " + emotion)
+        self.gui.terminal.see(tkinter.END)
+        self.evaEmotion(emotion)
+
+    def command_audio(self, node):
+        sound_file =  node.attrib["source"]
+        block = False # Audio self.play does not block script execution
+        if node.attrib["block"] == "TRUE":
+            block = True
+        message_audio = '\nSTATE: self.playing a sound: "' + "audio_files/" + sound_file + ".wav" + '", block=' + str(block)
+
+        # Process Audio Effects settings
+        if self.root.find("settings").find("audioEffects") != None:
+            if self.root.find("settings").find("audioEffects").attrib["mode"] == "OFF":
+                # Mode off implies the use of MUTED-SOUND file 
+                sound_file = "my_sounds/MUTED-SOUND.wav"
+                message_audio = "\nSTATE: Audio Effects DISABLED."
+
+        self.gui.terminal.insert(INSERT, message_audio)
+        self.gui.terminal.see(tkinter.END)
+
+        try:
+            if block == True:
+                if self.RUNNING_MODE == "EVA_ROBOT":
+                    self.client.publish(self.topic_base + "/log", "EVA will self.play a sound in blocking mode.")
+                    self.EVA_ROBOT_STATE = "BUSY"
+                    self.client.publish(self.topic_base + "/audio", sound_file + "|" + "TRUE")
+                    while (self.EVA_ROBOT_STATE != "FREE"):
+                        pass
+                else:
+                    print(sound_file)
+                    self.playsound("audio_files/" + sound_file + ".wav", block = block)
+
+            else: # Block = False
+                if self.RUNNING_MODE == "EVA_ROBOT":
+                    self.client.publish(self.topic_base + "/log", "EVA will self.play a sound in no-blocking mode.")
+                    self.client.publish(self.topic_base + "/audio", sound_file + "|" + "FALSE")
+                else:
+                    self.playsound("audio_files/" + sound_file + ".wav", block = block) 
+        except Exception as e:
+            # Handle an exception. I didn't find any exceptions in the library documentation
+            error_string = "\nError -> " + str(e) + "."
+            self.gui.terminal.insert(INSERT, error_string, "error")
+            self.gui.terminal.see(tkinter.END)
+            exit(1)
     
-    ##########################################################
-        elif node.tag == "case": 
-            global valor
-            self.memory.reg_case = 0 # Clear the case flag
-            valor = node.attrib["value"]
-            valor = valor.lower() # Comparisons are not case sensitive
-            # Handles comparison types and operators
-            # Case 1 (op = "exact")
-            if node.attrib['op'] == "exact": # Exact é sempre uma comparação de STRINGS
-                # Case in which a user variable was defined for a command: QRcode, random, userEmotion or userId
-                if node.attrib['var'] != "$":
-                    # It remains to check whether the variable exists in the robot's memory
-                    # self.memory.vars[st_var_value[1:]
-                    print("value: ", valor, type(valor), node.attrib['var'], self.memory.vars[node.attrib['var']])
-                    if valor[0] == "#": # é uma referência a uma variável
-                        valor = valor[1:] # remove o # da referência
-                    if valor == str(self.memory.vars[node.attrib['var']]).lower(): # Comparação de STRINGS
-                        print("case = true")
-                        self.memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
-    
-                # Checks if var_dollar memory has any value
-                elif (len(self.memory.var_dolar)) == 0:
+    def command_case(self, node):
+        global valor
+        self.memory.reg_case = 0 # Clear the case flag
+        valor = node.attrib["value"]
+        valor = valor.lower() # Comparisons are not case sensitive
+        # Handles comparison types and operators
+        # Case 1 (op = "exact")
+        if node.attrib['op'] == "exact": # Exact é sempre uma comparação de STRINGS
+            # Case in which a user variable was defined for a command: QRcode, random, userEmotion or userId
+            if node.attrib['var'] != "$":
+                # It remains to check whether the variable exists in the robot's memory
+                # self.memory.vars[st_var_value[1:]
+                print("value: ", valor, type(valor), node.attrib['var'], self.memory.vars[node.attrib['var']])
+                if valor[0] == "#": # é uma referência a uma variável
+                    valor = valor[1:] # remove o # da referência
+                if valor == str(self.memory.vars[node.attrib['var']]).lower(): # Comparação de STRINGS
+                    print("case = true")
+                    self.memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
+
+            # Checks if var_dollar memory has any value
+            elif (len(self.memory.var_dolar)) == 0:
+                self.gui.terminal.insert(INSERT, "\nError -> The variable $ has no value. Please, check your code.", "error")
+                self.gui.terminal.see(tkinter.END)
+                exit(1)  
+
+            
+            elif valor == self.memory.var_dolar[-1][0].lower():
+                # Compare value with the top of the stack of the var_dollar variable
+                print("value: ", valor, type(valor))
+                print("case = true")
+                self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+        
+        # Case 2 (op = "contain")
+        elif node.attrib['op'] == "contain":      
+            # Checa se a comparação é com o dollar
+            if "$" == node.attrib['var'][0]:
+                if (len(self.memory.var_dolar)) == 0: # Checks if var_dollar memory has any value
                     self.gui.terminal.insert(INSERT, "\nError -> The variable $ has no value. Please, check your code.", "error")
                     self.gui.terminal.see(tkinter.END)
                     exit(1)  
-    
-                
-                elif valor == self.memory.var_dolar[-1][0].lower():
-                    # Compare value with the top of the stack of the var_dollar variable
-                    print("value: ", valor, type(valor))
-                    print("case = true")
-                    self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
-            
-            # Case 2 (op = "contain")
-            elif node.attrib['op'] == "contain":      
-                # Checa se a comparação é com o dollar
-                if "$" == node.attrib['var'][0]:
-                    if (len(self.memory.var_dolar)) == 0: # Checks if var_dollar memory has any value
-                        self.gui.terminal.insert(INSERT, "\nError -> The variable $ has no value. Please, check your code.", "error")
-                        self.gui.terminal.see(tkinter.END)
-                        exit(1)  
-                    else:
-                        # Checks if the string in value is contained in $
-                        print("value: ", valor, type(valor))
-                        if valor in self.memory.var_dolar[-1][0].lower(): 
-                            print("case = true")
-                            self.memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
-                # se não é com dollar então é com uma var do usuário
-                elif node.attrib['var'] in self.memory.vars: # verifica se a variável de usuário existe na memória
-                    if "#" == valor[0]:
-                        valor = valor[1:]
-                        if str(self.memory.vars[valor]).lower() in str(self.memory.vars[node.attrib['var']]).lower():
-                            print("case = true")
-                            self.memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
-                    else:
-                        if valor in self.memory.vars[node.attrib['var']]:
-                            print("case = true")
-                            self.memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
                 else:
-                    self.gui.terminal.insert(INSERT, "\nError -> The variable '" + node.attrib['var'] + "' does no exist. Please, check your code.", "error")
-                    self.gui.terminal.see(tkinter.END)
+                    # Checks if the string in value is contained in $
+                    print("value: ", valor, type(valor))
+                    if valor in self.memory.var_dolar[-1][0].lower(): 
+                        print("case = true")
+                        self.memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
+            # se não é com dollar então é com uma var do usuário
+            elif node.attrib['var'] in self.memory.vars: # verifica se a variável de usuário existe na memória
+                if "#" == valor[0]:
+                    valor = valor[1:]
+                    if str(self.memory.vars[valor]).lower() in str(self.memory.vars[node.attrib['var']]).lower():
+                        print("case = true")
+                        self.memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
+                else:
+                    if valor in self.memory.vars[node.attrib['var']]:
+                        print("case = true")
+                        self.memory.reg_case = 1 # Turn on the reg case indicating that the comparison result was true
+            else:
+                self.gui.terminal.insert(INSERT, "\nError -> The variable '" + node.attrib['var'] + "' does no exist. Please, check your code.", "error")
+                self.gui.terminal.see(tkinter.END)
     ##########################################################
     
     
-            # case 3 (MATHEMATICAL COMPARISON)
-            else:
-                # Function to obtain an operand from $, n, #n, or value
-                def get_op(st_var_value):
-                    # Is a constant?
-                    if st_var_value.isnumeric():
-                        return int(st_var_value)
-    
-                    # Is $?
-                    if st_var_value == "$":
-                        # Checks if var_dollar memory has any value
-                        if (len(self.memory.var_dolar)) == 0:
-                            self.gui.terminal.insert(INSERT, "\nError -> The variable $ has no value. Please, check your code.", "error")
-                            self.gui.terminal.see(tkinter.END)
-                            exit(1)
-                        return int(self.memory.var_dolar[-1][0]) # Returns the value of $ converted for int
-    
-                    # Is a variable of type #n?
-                    if "#" in st_var_value:
-                        # Checks if var #... DOES NOT exist in memory
-                        if (st_var_value[1:] not in self.memory.vars):
-                            error_string = "\nError -> The variable #" + valor[1:] + " has not been declared. Please, check your code."
-                            self.gui.terminal.insert(INSERT, error_string, "error")
-                            self.gui.terminal.see(tkinter.END)
-                            exit(1)
-                        return int(self.memory.vars[st_var_value[1:]]) # Returns the value of #n converted for int
-                    
-                    # If it is not a number, nor a dollar, nor a #, then it is a variable of this type var = "x" in <switch>
-                    # Checks if the variable exists in memory
-                    if (st_var_value not in self.memory.vars):
+        # case 3 (MATHEMATICAL COMPARISON)
+        else:
+            # Function to obtain an operand from $, n, #n, or value
+            def get_op(st_var_value):
+                # Is a constant?
+                if st_var_value.isnumeric():
+                    return int(st_var_value)
+
+                # Is $?
+                if st_var_value == "$":
+                    # Checks if var_dollar memory has any value
+                    if (len(self.memory.var_dolar)) == 0:
+                        self.gui.terminal.insert(INSERT, "\nError -> The variable $ has no value. Please, check your code.", "error")
+                        self.gui.terminal.see(tkinter.END)
+                        exit(1)
+                    return int(self.memory.var_dolar[-1][0]) # Returns the value of $ converted for int
+
+                # Is a variable of type #n?
+                if "#" in st_var_value:
+                    # Checks if var #... DOES NOT exist in memory
+                    if (st_var_value[1:] not in self.memory.vars):
                         error_string = "\nError -> The variable #" + valor[1:] + " has not been declared. Please, check your code."
                         self.gui.terminal.insert(INSERT, error_string, "error")
                         self.gui.terminal.see(tkinter.END)
                         exit(1)
-                    return int(self.memory.vars[st_var_value]) # Returns the value of n converted for int
-    
-                # Obtains the operands to perform mathematical comparison operations
-                # The restriction on not using constants in var of <switch> was guaranteed in the parser
-                op1 = get_op(node.attrib['var'])
-                op2 = get_op(valor)
-    
-                # Performs the operations ==, >, <, >=, <= and != to compare operands 1 and 2
-                if node.attrib['op'] == "eq": # Equality
-                    if op1 == op2: # It is needed to remove the # from the variable
-                        print("case = true")
-                        self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
-    
-                elif node.attrib['op'] == "lt": # Less than
-                    if op1 < op2:
-                        print("case = true")
-                        self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
-    
-                elif node.attrib['op'] == "gt": # Greater than
-                    if op1 > op2:
-                        print("case = true")
-                        self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+                    return int(self.memory.vars[st_var_value[1:]]) # Returns the value of #n converted for int
                 
-                elif node.attrib['op'] == "lte": # Less than or Equal
-                    if op1 <= op2:
-                        print("case = true")
-                        self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
-    
-                elif node.attrib['op'] == "gte": # Greater than or Equal
-                    if op1 >= op2:
-                        print("case = true")
-                        self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
-    
-                elif node.attrib['op'] == "ne": # Not equal
-                    if op1 != op2:
-                        print("case = true")
-                        self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true        
-    
-    
-        elif node.tag == "default": # Default is always true
-            print("Default = true")
-            self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
-    
-    
-        elif node.tag == "counter":
-            var_name = node.attrib["var"]
-            var_value = int(node.attrib["value"])
-            op = node.attrib["op"]
-            # Checks if the operation is different from assignment and checks if var ... DOES NOT exist in memory
-            if op != "=":
-                if (var_name not in self.memory.vars):
-                    error_string = "\nError -> The variable " + var_name + " has not been declared. Please, check your code."
+                # If it is not a number, nor a dollar, nor a #, then it is a variable of this type var = "x" in <switch>
+                # Checks if the variable exists in memory
+                if (st_var_value not in self.memory.vars):
+                    error_string = "\nError -> The variable #" + valor[1:] + " has not been declared. Please, check your code."
                     self.gui.terminal.insert(INSERT, error_string, "error")
                     self.gui.terminal.see(tkinter.END)
                     exit(1)
-    
-            if op == "=": # Perform the assignment
-                self.memory.vars[var_name] = var_value
-    
-            if op == "+": # Perform the addition
-                self.memory.vars[var_name] += var_value
-    
-            if op == "*": # Perform the product
-                self.memory.vars[var_name] *= var_value
-    
-            if op == "/": # Performs the division (it was /=) but I changed it to //= (integer division)
-                self.memory.vars[var_name] //= var_value
-    
-            if op == "%": # Calculate the module
-                self.memory.vars[var_name] %= var_value
+                return int(self.memory.vars[st_var_value]) # Returns the value of n converted for int
+
+            # Obtains the operands to perform mathematical comparison operations
+            # The restriction on not using constants in var of <switch> was guaranteed in the parser
+            op1 = get_op(node.attrib['var'])
+            op2 = get_op(valor)
+
+            # Performs the operations ==, >, <, >=, <= and != to compare operands 1 and 2
+            if node.attrib['op'] == "eq": # Equality
+                if op1 == op2: # It is needed to remove the # from the variable
+                    print("case = true")
+                    self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+
+            elif node.attrib['op'] == "lt": # Less than
+                if op1 < op2:
+                    print("case = true")
+                    self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+
+            elif node.attrib['op'] == "gt": # Greater than
+                if op1 > op2:
+                    print("case = true")
+                    self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
             
-            print("Eva ram => ", self.memory.vars)
-            self.gui.terminal.insert(INSERT, "\nSTATE: Counter: var = " + var_name + ", value = " + str(var_value) + ", op(" + op + "), result = " + str(self.memory.vars[var_name]))
-            self.tab_load_mem_vars() # Enter data from variable memory into the variable table
-            self.gui.terminal.see(tkinter.END)
+            elif node.attrib['op'] == "lte": # Less than or Equal
+                if op1 <= op2:
+                    print("case = true")
+                    self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+
+            elif node.attrib['op'] == "gte": # Greater than or Equal
+                if op1 >= op2:
+                    print("case = true")
+                    self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+
+            elif node.attrib['op'] == "ne": # Not equal
+                if op1 != op2:
+                    print("case = true")
+                    self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true        
+
+    def command_counter(self, node):
+        var_name = node.attrib["var"]
+        var_value = int(node.attrib["value"])
+        op = node.attrib["op"]
+        # Checks if the operation is different from assignment and checks if var ... DOES NOT exist in memory
+        if op != "=":
+            if (var_name not in self.memory.vars):
+                error_string = "\nError -> The variable " + var_name + " has not been declared. Please, check your code."
+                self.gui.terminal.insert(INSERT, error_string, "error")
+                self.gui.terminal.see(tkinter.END)
+                exit(1)
+
+        if op == "=": # Perform the assignment
+            self.memory.vars[var_name] = var_value
+
+        if op == "+": # Perform the addition
+            self.memory.vars[var_name] += var_value
+
+        if op == "*": # Perform the product
+            self.memory.vars[var_name] *= var_value
+
+        if op == "/": # Performs the division (it was /=) but I changed it to //= (integer division)
+            self.memory.vars[var_name] //= var_value
+
+        if op == "%": # Calculate the module
+            self.memory.vars[var_name] %= var_value
+        
+        print("Eva ram => ", self.memory.vars)
+        self.gui.terminal.insert(INSERT, "\nSTATE: Counter: var = " + var_name + ", value = " + str(var_value) + ", op(" + op + "), result = " + str(self.memory.vars[var_name]))
+        self.tab_load_mem_vars() # Enter data from variable memory into the variable table
+        self.gui.terminal.see(tkinter.END)
     
-    
-        elif node.tag == "textEmotion":
-            # Falta implementar o modo Simulador ###############
-            if self.RUNNING_MODE == "EVA_ROBOT": 
-                self.client.publish(self.topic_base + "/log", "EVA is analysing the text emotion...")
-                self.EVA_ROBOT_STATE = "BUSY"
-                self.ledAnimation("RAINBOW")
-                if node.get("language") == None:
-                    self.client.publish(self.topic_base + "/textEmotion", config.LANG_DEFAULT_GOOGLE_TRANSLATING + "|" + self.memory.var_dolar[-1][0])
-                else:
-                    self.client.publish(self.topic_base + "/textEmotion", node.attrib["language"] + "|" + self.memory.var_dolar[-1][0])
-                    
-    
-                while (self.EVA_ROBOT_STATE != "FREE"):
-                    pass
-                
-                if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    self.memory.var_dolar.append([self.EVA_DOLLAR, "<textEmotion>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion: var=$" + ", value = " + self.memory.var_dolar[-1][0])
-                    self.tab_load_mem_dollar()
-                    self.gui.terminal.see(tkinter.END)
-                    self.ledAnimation("STOP")
-                else:
-                    var_name = node.attrib["var"]
-                    self.memory.vars[var_name] = self.EVA_DOLLAR
-                    print("Eva ram => ", self.memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                    self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                    self.gui.terminal.see(tkinter.END)
-                    print("textEmotion command USING VAR...")
-                self.ledAnimation("STOP")
-            
+    def command_textEmotion(self, node):
+        # Falta implementar o modo Simulador ###############
+        if self.RUNNING_MODE == "EVA_ROBOT": 
+            self.client.publish(self.topic_base + "/log", "EVA is analysing the text emotion...")
+            self.EVA_ROBOT_STATE = "BUSY"
+            self.ledAnimation("RAINBOW")
+            if node.get("language") == None:
+                self.client.publish(self.topic_base + "/textEmotion", config.LANG_DEFAULT_GOOGLE_TRANSLATING + "|" + self.memory.var_dolar[-1][0])
             else:
+                self.client.publish(self.topic_base + "/textEmotion", node.attrib["language"] + "|" + self.memory.var_dolar[-1][0])
+                
+
+            while (self.EVA_ROBOT_STATE != "FREE"):
+                pass
             
-                self.lock_thread_pop()
-                self.ledAnimation("LISTEN")
-                def fechar_pop(): # Pop up window closing function
-                    print(var.get())
-                    if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                        self.memory.var_dolar.append([var.get(), "<textEmotion>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                        self.tab_load_mem_dollar()
-                        self.gui.terminal.see(tkinter.END)
-                    else:
-                        var_name = node.attrib["var"]
-                        self.memory.vars[var_name] = var.get()
-                        print("Eva ram => ", self.memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                        self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                        self.gui.terminal.see(tkinter.END)
-                        print("textEmotion command USING VAR...")
-                    pop.destroy()
-                    self.ledAnimation("STOP")
-                    self.unlock_thread_pop() # Reactivate the script processing thread
-    
-                var = StringVar()
-                var.set("NEUTRAL")
-                img_neutral = PhotoImage(file = "images/img_neutral.png")
-                img_happy = PhotoImage(file = "images/img_happy.png")
-                img_angry = PhotoImage(file = "images/img_angry.png")
-                img_sad = PhotoImage(file = "images/img_sad.png")
-                img_surprise = PhotoImage(file = "images/img_surprise.png")
-                img_fear = PhotoImage(file = "images/img_fear.png")
-                img_disgust = PhotoImage(file = "images/img_disgust.png")
-                pop = Toplevel(self.gui)
-                pop.title("textEmotion Command")
-                # Disable the maximize and close buttons
-                pop.resizable(False, False)
-                pop.protocol("WM_DELETE_WINDOW", False)
-                w = 970
-                h = 250
-                ws = self.gui.winfo_screenwidth()
-                hs = self.gui.winfo_screenheight()
-                x = (ws/2) - (w/2)
-                y = (hs/2) - (h/2)  
-                pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
-                Label(pop, text="Eva is analysing the sentiment of your text. Please, choose one emotion!", font = ('Arial', 10)).place(x = 290, y = 10)
-                # Images are disself.played using labels
-                Label(pop, image=img_neutral).place(x = 10, y = 50)
-                Label(pop, image=img_happy).place(x = 147, y = 50)
-                Label(pop, image=img_angry).place(x = 284, y = 50)
-                Label(pop, image=img_sad).place(x = 421, y = 50)
-                Label(pop, image=img_surprise).place(x = 558, y = 50)
-                Label(pop, image=img_fear).place(x = 695, y = 50)
-                Label(pop, image=img_disgust).place(x = 832, y = 50)
-                Radiobutton(pop, text = "Neutral", variable = var, font = self.font1, command = None, value = "NEUTRAL").place(x = 35, y = 185)
-                Radiobutton(pop, text = "Happy", variable = var, font = self.font1, command = None, value = "HAPPY").place(x = 172, y = 185)
-                Radiobutton(pop, text = "Angry", variable = var, font = self.font1, command = None, value = "ANGRY").place(x = 312, y = 185)
-                Radiobutton(pop, text = "Sad", variable = var, font = self.font1, command = None, value = "SAD").place(x = 452, y = 185)
-                Radiobutton(pop, text = "Surprise", variable = var, font = self.font1, command = None, value = "SURPRISE").place(x = 580, y = 185)
-                Radiobutton(pop, text = "Fear", variable = var, font = self.font1, command = None, value = "FEAR").place(x = 725, y = 185)
-                Radiobutton(pop, text = "Disgust", variable = var, font = self.font1, command = None, value = "DISGUST").place(x = 855, y = 185)
-                Button(pop, text = "           OK          ", font = self.font1, command = fechar_pop).place(x = 430, y = 215)
-                # Wait for release, waiting for the user's response
-                while self.thread_pop_pause: 
-                    time.sleep(0.5)
-    
-        elif node.tag == "userHandPose":
-            global img_thumbsup, img_thumbsdown, img_peace, img_open, img_three
-    
-            if self.gui.chk_handpose_value.get() == 1:
-                
-                self.lock_thread_pop()
-                self.ledAnimation("LISTEN")
-                
-                result_pose = hp.run()
-    
-    
-                var = StringVar(value=result_pose)
-    
-                if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                    self.memory.var_dolar.append([var.get(), "<userHandPose>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : var=$" + ", value=" + self.memory.var_dolar[-1][0])
+            if node.get("var") == None: # Maintains compatibility with the use of the $ variable
+                self.memory.var_dolar.append([self.EVA_DOLLAR, "<textEmotion>"])
+                self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion: var=$" + ", value = " + self.memory.var_dolar[-1][0])
+                self.tab_load_mem_dollar()
+                self.gui.terminal.see(tkinter.END)
+                self.ledAnimation("STOP")
+            else:
+                var_name = node.attrib["var"]
+                self.memory.vars[var_name] = self.EVA_DOLLAR
+                print("Eva ram => ", self.memory.vars)
+                self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
+                self.tab_load_mem_vars() # Enter data from variable memory into the var table
+                self.gui.terminal.see(tkinter.END)
+                print("textEmotion command USING VAR...")
+            self.ledAnimation("STOP")
+        
+        else:
+        
+            self.lock_thread_pop()
+            self.ledAnimation("LISTEN")
+            def fechar_pop(): # Pop up window closing function
+                print(var.get())
+                if node.get("var") == None: # Maintains compatibility with the use of the $ variable
+                    self.memory.var_dolar.append([var.get(), "<textEmotion>"])
+                    self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
                 else:
                     var_name = node.attrib["var"]
                     self.memory.vars[var_name] = var.get()
                     print("Eva ram => ", self.memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
-                    self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
+                    self.gui.terminal.insert(INSERT, "\nSTATE: textEmotion (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
+                    self.tab_load_mem_vars() # Enter data from variable memory into the var table
                     self.gui.terminal.see(tkinter.END)
-    
-    
-            elif self.gui.chk_handpose_value.get() == 0:    
-                self.lock_thread_pop()
-    
-                def fechar_pop(): # função de fechamento da janela pop up
-                        print(var.get())
-                        if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                            self.memory.var_dolar.append([var.get(), "<userHandPose>"])
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : var=$" + ", value=" + self.memory.var_dolar[-1][0])
-                            self.tab_load_mem_dollar()
-                            self.gui.terminal.see(tkinter.END)
-                        else:
-                            var_name = node.attrib["var"]
-                            self.memory.vars[var_name] = var.get()
-                            print("Eva ram => ", self.memory.vars)
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
-                            self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
-                            self.gui.terminal.see(tkinter.END)
-                            print("userHandPose command USING VAR...")
-                        pop.destroy()
-                        self.ledAnimation("STOP")
-                        self.unlock_thread_pop() # reativa a thread de processamento do script
-    
-                var = StringVar()
-                var.set("OPEN")
-                img_thumbsup = PhotoImage(file = "images/img_thumbsup.png")
-                img_thumbsdown = PhotoImage(file = "images/img_thumbsdown.png")
-                img_peace = PhotoImage(file = "images/img_peace.png")
-                img_open = PhotoImage(file = "images/img_open.png")
-                img_three = PhotoImage(file = "images/img_three.png")
-                pop = Toplevel(self.window)
-                pop.title("userHandPose Command")
-                # Disable the max and close buttons
-                pop.resizable(False, False)
-                pop.protocol("WM_DELETE_WINDOW", False)
-                w = 697
-                h = 250
-                ws = self.gui.winfo_screenwidth()
-                hs = self.gui.winfo_screenheight()
-                x = (ws/2) - (w/2)
-                y = (hs/2) - (h/2)  
-                pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
-                pop.grab_set() # faz com que a janela receba todos os eventos
-                Label(pop, text="Eva is analysing your hands. Please, choose one gesture!", font = ('Arial', 10)).place(x = 146, y = 10)
-                # imagens são exibidas usando os lables
-                Label(pop, image=img_thumbsup).place(x = 10, y = 50)
-                Label(pop, image=img_thumbsdown).place(x = 147, y = 50)
-                Label(pop, image=img_peace).place(x = 284, y = 50)
-                Label(pop, image=img_open).place(x = 421, y = 50)
-                Label(pop, image=img_three).place(x = 558, y = 50)
-                Radiobutton(pop, text = "Thumbs_UP", variable = var, font = self.font1, command = None, value = "THUMBS_UP").place(x = 25, y = 185)
-                Radiobutton(pop, text = "Thumbs_DOWN", variable = var, font = self.font1, command = None, value = "THUMBS_DOWN").place(x = 152, y = 185)
-                Radiobutton(pop, text = "Peace", variable = var, font = self.font1, command = None, value = "PEACE").place(x = 302, y = 185)
-                Radiobutton(pop, text = "Open", variable = var, font = self.font1, command = None, value = "OPEN").place(x = 442, y = 185)
-                Radiobutton(pop, text = "Three", variable = var, font = self.font1, command = None, value = "THREE").place(x = 575, y = 185)
-                Button(pop, text = "     OK     ", font = self.font1, command = fechar_pop).place(x = 310, y = 215)
-                # espera pela liberacao, aguardando a resposta do usuario
-                while self.thread_pop_pause: 
-                    time.sleep(0.5)
+                    print("textEmotion command USING VAR...")
+                pop.destroy()
                 self.ledAnimation("STOP")
+                self.unlock_thread_pop() # Reactivate the script processing thread
+
+            var = StringVar()
+            var.set("NEUTRAL")
+            img_neutral = PhotoImage(file = "images/img_neutral.png")
+            img_happy = PhotoImage(file = "images/img_happy.png")
+            img_angry = PhotoImage(file = "images/img_angry.png")
+            img_sad = PhotoImage(file = "images/img_sad.png")
+            img_surprise = PhotoImage(file = "images/img_surprise.png")
+            img_fear = PhotoImage(file = "images/img_fear.png")
+            img_disgust = PhotoImage(file = "images/img_disgust.png")
+            pop = Toplevel(self.gui)
+            pop.title("textEmotion Command")
+            # Disable the maximize and close buttons
+            pop.resizable(False, False)
+            pop.protocol("WM_DELETE_WINDOW", False)
+            w = 970
+            h = 250
+            ws = self.gui.winfo_screenwidth()
+            hs = self.gui.winfo_screenheight()
+            x = (ws/2) - (w/2)
+            y = (hs/2) - (h/2)  
+            pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
+            Label(pop, text="Eva is analysing the sentiment of your text. Please, choose one emotion!", font = ('Arial', 10)).place(x = 290, y = 10)
+            # Images are disself.played using labels
+            Label(pop, image=img_neutral).place(x = 10, y = 50)
+            Label(pop, image=img_happy).place(x = 147, y = 50)
+            Label(pop, image=img_angry).place(x = 284, y = 50)
+            Label(pop, image=img_sad).place(x = 421, y = 50)
+            Label(pop, image=img_surprise).place(x = 558, y = 50)
+            Label(pop, image=img_fear).place(x = 695, y = 50)
+            Label(pop, image=img_disgust).place(x = 832, y = 50)
+            Radiobutton(pop, text = "Neutral", variable = var, font = self.font1, command = None, value = "NEUTRAL").place(x = 35, y = 185)
+            Radiobutton(pop, text = "Happy", variable = var, font = self.font1, command = None, value = "HAPPY").place(x = 172, y = 185)
+            Radiobutton(pop, text = "Angry", variable = var, font = self.font1, command = None, value = "ANGRY").place(x = 312, y = 185)
+            Radiobutton(pop, text = "Sad", variable = var, font = self.font1, command = None, value = "SAD").place(x = 452, y = 185)
+            Radiobutton(pop, text = "Surprise", variable = var, font = self.font1, command = None, value = "SURPRISE").place(x = 580, y = 185)
+            Radiobutton(pop, text = "Fear", variable = var, font = self.font1, command = None, value = "FEAR").place(x = 725, y = 185)
+            Radiobutton(pop, text = "Disgust", variable = var, font = self.font1, command = None, value = "DISGUST").place(x = 855, y = 185)
+            Button(pop, text = "           OK          ", font = self.font1, command = fechar_pop).place(x = 430, y = 215)
+            # Wait for release, waiting for the user's response
+            while self.thread_pop_pause: 
+                time.sleep(0.5)
+   
+    def command_userHandPose(self, node):
+        global img_thumbsup, img_thumbsdown, img_peace, img_open, img_three
     
-        elif node.tag == "userEmotion":
-            # global img_neutral, img_happy, img_angry, img_sad, img_surprise, img_fear, img_desgust
+        if self.gui.chk_handpose_value.get() == 1:
             
-            if self.RUNNING_MODE == "EVA_ROBOT": 
-                self.client.publish(self.topic_base + "/log", "EVA is capturing the user emotion...")
-                self.EVA_ROBOT_STATE = "BUSY"
-                self.ledAnimation("LISTEN")
-                self.client.publish(self.topic_base + "/userEmotion", " ")
+            self.lock_thread_pop()
+            self.ledAnimation("LISTEN")
+            
+            result_pose = hp.run()
+
+
+            var = StringVar(value=result_pose)
+
+            if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
+                self.memory.var_dolar.append([var.get(), "<userHandPose>"])
+                self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : var=$" + ", value=" + self.memory.var_dolar[-1][0])
+                self.tab_load_mem_dollar()
+                self.gui.terminal.see(tkinter.END)
+            else:
+                var_name = node.attrib["var"]
+                self.memory.vars[var_name] = var.get()
+                print("Eva ram => ", self.memory.vars)
+                self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
+                self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
+                self.gui.terminal.see(tkinter.END)
+
+
+        elif self.gui.chk_handpose_value.get() == 0:    
+            self.lock_thread_pop()
+
+            def fechar_pop(): # função de fechamento da janela pop up
+                    print(var.get())
+                    if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
+                        self.memory.var_dolar.append([var.get(), "<userHandPose>"])
+                        self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : var=$" + ", value=" + self.memory.var_dolar[-1][0])
+                        self.tab_load_mem_dollar()
+                        self.gui.terminal.see(tkinter.END)
+                    else:
+                        var_name = node.attrib["var"]
+                        self.memory.vars[var_name] = var.get()
+                        print("Eva ram => ", self.memory.vars)
+                        self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
+                        self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
+                        self.gui.terminal.see(tkinter.END)
+                        print("userHandPose command USING VAR...")
+                    pop.destroy()
+                    self.ledAnimation("STOP")
+                    self.unlock_thread_pop() # reativa a thread de processamento do script
+
+            var = StringVar()
+            var.set("OPEN")
+            img_thumbsup = PhotoImage(file = "images/img_thumbsup.png")
+            img_thumbsdown = PhotoImage(file = "images/img_thumbsdown.png")
+            img_peace = PhotoImage(file = "images/img_peace.png")
+            img_open = PhotoImage(file = "images/img_open.png")
+            img_three = PhotoImage(file = "images/img_three.png")
+            pop = Toplevel(self.window)
+            pop.title("userHandPose Command")
+            # Disable the max and close buttons
+            pop.resizable(False, False)
+            pop.protocol("WM_DELETE_WINDOW", False)
+            w = 697
+            h = 250
+            ws = self.gui.winfo_screenwidth()
+            hs = self.gui.winfo_screenheight()
+            x = (ws/2) - (w/2)
+            y = (hs/2) - (h/2)  
+            pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
+            pop.grab_set() # faz com que a janela receba todos os eventos
+            Label(pop, text="Eva is analysing your hands. Please, choose one gesture!", font = ('Arial', 10)).place(x = 146, y = 10)
+            # imagens são exibidas usando os lables
+            Label(pop, image=img_thumbsup).place(x = 10, y = 50)
+            Label(pop, image=img_thumbsdown).place(x = 147, y = 50)
+            Label(pop, image=img_peace).place(x = 284, y = 50)
+            Label(pop, image=img_open).place(x = 421, y = 50)
+            Label(pop, image=img_three).place(x = 558, y = 50)
+            Radiobutton(pop, text = "Thumbs_UP", variable = var, font = self.font1, command = None, value = "THUMBS_UP").place(x = 25, y = 185)
+            Radiobutton(pop, text = "Thumbs_DOWN", variable = var, font = self.font1, command = None, value = "THUMBS_DOWN").place(x = 152, y = 185)
+            Radiobutton(pop, text = "Peace", variable = var, font = self.font1, command = None, value = "PEACE").place(x = 302, y = 185)
+            Radiobutton(pop, text = "Open", variable = var, font = self.font1, command = None, value = "OPEN").place(x = 442, y = 185)
+            Radiobutton(pop, text = "Three", variable = var, font = self.font1, command = None, value = "THREE").place(x = 575, y = 185)
+            Button(pop, text = "     OK     ", font = self.font1, command = fechar_pop).place(x = 310, y = 215)
+            # espera pela liberacao, aguardando a resposta do usuario
+            while self.thread_pop_pause: 
+                time.sleep(0.5)
+            self.ledAnimation("STOP")
     
-                while (self.EVA_ROBOT_STATE != "FREE"):
-                    pass
-                
-                if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    self.memory.var_dolar.append([self.EVA_DOLLAR, "<listen>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion: var=$" + ", value = " + self.memory.var_dolar[-1][0])
+    def command_userEmotion(self, node):
+        # global img_neutral, img_happy, img_angry, img_sad, img_surprise, img_fear, img_desgust
+            
+        if self.RUNNING_MODE == "EVA_ROBOT": 
+            self.client.publish(self.topic_base + "/log", "EVA is capturing the user emotion...")
+            self.EVA_ROBOT_STATE = "BUSY"
+            self.ledAnimation("LISTEN")
+            self.client.publish(self.topic_base + "/userEmotion", " ")
+
+            while (self.EVA_ROBOT_STATE != "FREE"):
+                pass
+            
+            if node.get("var") == None: # Maintains compatibility with the use of the $ variable
+                self.memory.var_dolar.append([self.EVA_DOLLAR, "<listen>"])
+                self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion: var=$" + ", value = " + self.memory.var_dolar[-1][0])
+                self.tab_load_mem_dollar()
+                self.gui.terminal.see(tkinter.END)
+                self.ledAnimation("STOP")
+            else:
+                var_name = node.attrib["var"]
+                self.memory.vars[var_name] = self.EVA_DOLLAR
+                print("Eva ram => ", self.memory.vars)
+                self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
+                self.tab_load_mem_vars() # Enter data from variable memory into the variable table
+                self.gui.terminal.see(tkinter.END)
+                print("userEmotion command USING VAR...")
+                self.ledAnimation("STOP")
+        else:
+        
+            ###############
+            self.lock_thread_pop()
+            self.ledAnimation("LISTEN")
+
+            if self.gui.chk_emotion_value.get() == 1:
+                result_emotion = ue.run()
+
+                var = StringVar(value=result_emotion)
+                if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
+                    self.memory.var_dolar.append([var.get(), "<userEmotion>"])
+                    self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : var=$" + ", value=" + self.memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
-                    self.ledAnimation("STOP")
                 else:
                     var_name = node.attrib["var"]
-                    self.memory.vars[var_name] = self.EVA_DOLLAR
+                    self.memory.vars[var_name] = var.get()
                     print("Eva ram => ", self.memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                    self.tab_load_mem_vars() # Enter data from variable memory into the variable table
+                    self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
+                    self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                     self.gui.terminal.see(tkinter.END)
-                    print("userEmotion command USING VAR...")
-                    self.ledAnimation("STOP")
-            else:
-            
-                ###############
-                self.lock_thread_pop()
-                self.ledAnimation("LISTEN")
-    
-                if self.gui.chk_emotion_value.get() == 1:
-                    result_emotion = ue.run()
-    
-                    var = StringVar(value=result_emotion)
+           
+            elif self.gui.chk_emotion_value.get() == 0:
+                def fechar_pop(): # função de fechamento da janela pop up
+                    print(var.get())
                     if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
                         self.memory.var_dolar.append([var.get(), "<userEmotion>"])
                         self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : var=$" + ", value=" + self.memory.var_dolar[-1][0])
@@ -1494,317 +1474,381 @@ class EvaSim:
                         self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
                         self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                         self.gui.terminal.see(tkinter.END)
-               
-                elif self.gui.chk_emotion_value.get() == 0:
-                    def fechar_pop(): # função de fechamento da janela pop up
-                        print(var.get())
-                        if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                            self.memory.var_dolar.append([var.get(), "<userEmotion>"])
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : var=$" + ", value=" + self.memory.var_dolar[-1][0])
-                            self.tab_load_mem_dollar()
-                            self.gui.terminal.see(tkinter.END)
-                        else:
-                            var_name = node.attrib["var"]
-                            self.memory.vars[var_name] = var.get()
-                            print("Eva ram => ", self.memory.vars)
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
-                            self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
-                            self.gui.terminal.see(tkinter.END)
-                            print("userEmotion command USING VAR...")
-                        pop.destroy()
-                        self.ledAnimation("STOP")
-                        self.unlock_thread_pop() # reativa a thread de processamento do script
+                        print("userEmotion command USING VAR...")
+                    pop.destroy()
+                    self.ledAnimation("STOP")
+                    self.unlock_thread_pop() # reativa a thread de processamento do script
+
+                var = StringVar()
+                var.set("NEUTRAL")
+                img_neutral = PhotoImage(file = "images/img_neutral.png")
+                img_happy = PhotoImage(file = "images/img_happy.png")
+                img_angry = PhotoImage(file = "images/img_angry.png")
+                img_sad = PhotoImage(file = "images/img_sad.png")
+                img_surprise = PhotoImage(file = "images/img_surprise.png")
+                img_fear = PhotoImage(file = "images/img_fear.png")
+                img_disgust = PhotoImage(file = "images/img_disgust.png")
+                pop = Toplevel(self.gui)
+                pop.title("userEmotion Command")
+                # Disable the max and close buttons
+                pop.resizable(False, False)
+                pop.protocol("WM_DELETE_WINDOW", False)
+                w = 973
+                h = 250
+                ws = self.gui.winfo_screenwidth()
+                hs = self.gui.winfo_screenheight()
+                x = (ws/2) - (w/2)
+                y = (hs/2) - (h/2)  
+                pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
+                # pop.grab_set() # faz com que a janela receba todos os eventos
+                Label(pop, text="Eva is analysing your face expression. Please, choose one emotion!", font = ('Arial', 10)).place(x = 246, y = 10)
+                # imagens são exibidas usando os lables
+                Label(pop, image=img_neutral).place(x = 10, y = 50)
+                Label(pop, image=img_happy).place(x = 147, y = 50)
+                Label(pop, image=img_angry).place(x = 284, y = 50)
+                Label(pop, image=img_sad).place(x = 421, y = 50)
+                Label(pop, image=img_surprise).place(x = 558, y = 50)
+                Label(pop, image=img_fear).place(x = 695, y = 50)
+                Label(pop, image=img_disgust).place(x = 832, y = 50)
+                Radiobutton(pop, text = "Neutral", variable = var, font = self.font1, command = None, value = "NEUTRAL").place(x = 35, y = 185)
+                Radiobutton(pop, text = "Happy", variable = var, font = self.font1, command = None, value = "HAPPY").place(x = 172, y = 185)
+                Radiobutton(pop, text = "Angry", variable = var, font = self.font1, command = None, value = "ANGRY").place(x = 312, y = 185)
+                Radiobutton(pop, text = "Sad", variable = var, font = self.font1, command = None, value = "SAD").place(x = 452, y = 185)
+                Radiobutton(pop, text = "Surprise", variable = var, font = self.font1, command = None, value = "SURPRISE").place(x = 575, y = 185)
+                Radiobutton(pop, text = "Fear", variable = var, font = self.font1, command = None, value = "FEAR").place(x = 715, y = 185)
+                Radiobutton(pop, text = "Disgust", variable = var, font = self.font1, command = None, value = "DISGUST").place(x = 852, y = 185)
+                Button(pop, text = "     OK     ", font = self.font1, command = fechar_pop).place(x = 440, y = 215)
+                # espera pela liberacao, aguardando a resposta do usuario
+                while self.thread_pop_pause: 
+                    time.sleep(0.5)
     
-                    var = StringVar()
-                    var.set("NEUTRAL")
-                    img_neutral = PhotoImage(file = "images/img_neutral.png")
-                    img_happy = PhotoImage(file = "images/img_happy.png")
-                    img_angry = PhotoImage(file = "images/img_angry.png")
-                    img_sad = PhotoImage(file = "images/img_sad.png")
-                    img_surprise = PhotoImage(file = "images/img_surprise.png")
-                    img_fear = PhotoImage(file = "images/img_fear.png")
-                    img_disgust = PhotoImage(file = "images/img_disgust.png")
-                    pop = Toplevel(self.gui)
-                    pop.title("userEmotion Command")
-                    # Disable the max and close buttons
-                    pop.resizable(False, False)
-                    pop.protocol("WM_DELETE_WINDOW", False)
-                    w = 973
-                    h = 250
-                    ws = self.gui.winfo_screenwidth()
-                    hs = self.gui.winfo_screenheight()
-                    x = (ws/2) - (w/2)
-                    y = (hs/2) - (h/2)  
-                    pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
-                    # pop.grab_set() # faz com que a janela receba todos os eventos
-                    Label(pop, text="Eva is analysing your face expression. Please, choose one emotion!", font = ('Arial', 10)).place(x = 246, y = 10)
-                    # imagens são exibidas usando os lables
-                    Label(pop, image=img_neutral).place(x = 10, y = 50)
-                    Label(pop, image=img_happy).place(x = 147, y = 50)
-                    Label(pop, image=img_angry).place(x = 284, y = 50)
-                    Label(pop, image=img_sad).place(x = 421, y = 50)
-                    Label(pop, image=img_surprise).place(x = 558, y = 50)
-                    Label(pop, image=img_fear).place(x = 695, y = 50)
-                    Label(pop, image=img_disgust).place(x = 832, y = 50)
-                    Radiobutton(pop, text = "Neutral", variable = var, font = self.font1, command = None, value = "NEUTRAL").place(x = 35, y = 185)
-                    Radiobutton(pop, text = "Happy", variable = var, font = self.font1, command = None, value = "HAPPY").place(x = 172, y = 185)
-                    Radiobutton(pop, text = "Angry", variable = var, font = self.font1, command = None, value = "ANGRY").place(x = 312, y = 185)
-                    Radiobutton(pop, text = "Sad", variable = var, font = self.font1, command = None, value = "SAD").place(x = 452, y = 185)
-                    Radiobutton(pop, text = "Surprise", variable = var, font = self.font1, command = None, value = "SURPRISE").place(x = 575, y = 185)
-                    Radiobutton(pop, text = "Fear", variable = var, font = self.font1, command = None, value = "FEAR").place(x = 715, y = 185)
-                    Radiobutton(pop, text = "Disgust", variable = var, font = self.font1, command = None, value = "DISGUST").place(x = 852, y = 185)
-                    Button(pop, text = "     OK     ", font = self.font1, command = fechar_pop).place(x = 440, y = 215)
-                    # espera pela liberacao, aguardando a resposta do usuario
-                    while self.thread_pop_pause: 
-                        time.sleep(0.5)
-    
-        elif node.tag == "qrRead":
-            if self.RUNNING_MODE == "EVA_ROBOT": 
-                self.client.publish(self.topic_base + "/log", "EVA is capturing QR Code information...")
-                self.EVA_ROBOT_STATE = "BUSY"
-                self.client.publish(self.topic_base + "/qrRead", " ")
-                self.ledAnimation("LISTEN")
-                
-    
-                while (self.EVA_ROBOT_STATE != "FREE"):
-                    pass
-                
-                
-                if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    self.memory.var_dolar.append([self.EVA_DOLLAR, "<qrRead>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
+    def command_qrRead(self, node):
+        if self.RUNNING_MODE == "EVA_ROBOT": 
+            self.client.publish(self.topic_base + "/log", "EVA is capturing QR Code information...")
+            self.EVA_ROBOT_STATE = "BUSY"
+            self.client.publish(self.topic_base + "/qrRead", " ")
+            self.ledAnimation("LISTEN")
+            
+
+            while (self.EVA_ROBOT_STATE != "FREE"):
+                pass
+            
+            
+            if node.get("var") == None: # Maintains compatibility with the use of the $ variable
+                self.memory.var_dolar.append([self.EVA_DOLLAR, "<qrRead>"])
+                self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
+                self.tab_load_mem_dollar()
+                self.gui.terminal.see(tkinter.END)
+                self.ledAnimation("STOP")
+            else:
+                var_name = node.attrib["var"]
+                self.memory.vars[var_name] = self.EVA_DOLLAR
+                print("Eva ram => ", self.memory.vars)
+                self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
+                self.tab_load_mem_vars() # Enter data from variable memory into the var table
+                self.gui.terminal.see(tkinter.END)
+                print("qrRead command USING VAR...")
+            self.ledAnimation("STOP")
+
+        else:
+            self.lock_thread_pop()
+            self.ledAnimation("LISTEN")
+            if self.gui.chk_qrRead_value.get() == 1:
+            
+                result_qr = qr.main()
+
+                var = StringVar(value=result_qr)
+
+                if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
+                    self.memory.var_dolar.append([var.get(), "<qrRead>"])
+                    self.gui.terminal.insert(INSERT, "\nSTATE: qrRead : var=$" + ", value=" + self.memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
-                    self.ledAnimation("STOP")
                 else:
                     var_name = node.attrib["var"]
-                    self.memory.vars[var_name] = self.EVA_DOLLAR
+                    self.memory.vars[var_name] = var.get()
                     print("Eva ram => ", self.memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                    self.tab_load_mem_vars() # Enter data from variable memory into the var table
+                    self.gui.terminal.insert(INSERT, "\nSTATE: qrRead : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
+                    self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                     self.gui.terminal.see(tkinter.END)
-                    print("qrRead command USING VAR...")
-                self.ledAnimation("STOP")
-    
-            else:
+
+            elif self.gui.chk_qrRead_value.get() == 0:
             
-                self.lock_thread_pop()
-                self.ledAnimation("LISTEN")
-                if self.gui.chk_qrRead_value.get() == 1:
-                
-                    result_qr = qr.main()
-    
-                    var = StringVar(value=result_qr)
-    
-                    if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
+                # Pop up window closing function for the <return> key
+                def fechar_pop_ret(s): 
+                    print(var.get())
+                    if node.get("var") == None: # Maintains compatibility with the use of the $ variable
                         self.memory.var_dolar.append([var.get(), "<qrRead>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: qrRead : var=$" + ", value=" + self.memory.var_dolar[-1][0])
+                        self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                         self.tab_load_mem_dollar()
                         self.gui.terminal.see(tkinter.END)
+                        pop.destroy()
+                        self.unlock_thread_pop() # Reactivate the script processing thread
                     else:
                         var_name = node.attrib["var"]
                         self.memory.vars[var_name] = var.get()
                         print("Eva ram => ", self.memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: qrRead : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
-                        self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
+                        self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
+                        self.tab_load_mem_vars() # Enter data from variable memory into the var table
                         self.gui.terminal.see(tkinter.END)
-    
-                elif self.gui.chk_qrRead_value.get() == 0:
+                        print("qrRead command USING VAR...")
+                        pop.destroy()
+                        self.unlock_thread_pop() # Reactivate the script processing thread
                 
-                    # Pop up window closing function for the <return> key
-                    def fechar_pop_ret(s): 
-                        print(var.get())
-                        if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                            self.memory.var_dolar.append([var.get(), "<qrRead>"])
-                            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                            self.tab_load_mem_dollar()
-                            self.gui.terminal.see(tkinter.END)
-                            pop.destroy()
-                            self.unlock_thread_pop() # Reactivate the script processing thread
-                        else:
-                            var_name = node.attrib["var"]
-                            self.memory.vars[var_name] = var.get()
-                            print("Eva ram => ", self.memory.vars)
-                            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                            self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                            self.gui.terminal.see(tkinter.END)
-                            print("qrRead command USING VAR...")
-                            pop.destroy()
-                            self.unlock_thread_pop() # Reactivate the script processing thread
+                # Pop up window closing function for OK button
+                def fechar_pop_bt(): 
+                    print(var.get())
+                    if node.get("var") == None: # Maintains compatibility with the use of the $ variable
+                        self.memory.var_dolar.append([var.get(), "<qrRead>"])
+                        self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
+                        self.tab_load_mem_dollar()
+                        self.gui.terminal.see(tkinter.END)
+                        pop.destroy()
+                        self.unlock_thread_pop() # Reactivate the script processing thread
+                    else:
+                        var_name = node.attrib["var"]
+                        self.memory.vars[var_name] = var.get()
+                        print("Eva ram => ", self.memory.vars)
+                        self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
+                        self.tab_load_mem_vars() # Enter data from variable memory into the var table
+                        self.gui.terminal.see(tkinter.END)
+                        print("qrRead command USING VAR...")
+                        pop.destroy()
+                        self.unlock_thread_pop() # Reactivate the script processing thread
                     
-                    # Pop up window closing function for OK button
-                    def fechar_pop_bt(): 
-                        print(var.get())
-                        if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                            self.memory.var_dolar.append([var.get(), "<qrRead>"])
-                            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                            self.tab_load_mem_dollar()
-                            self.gui.terminal.see(tkinter.END)
-                            pop.destroy()
-                            self.unlock_thread_pop() # Reactivate the script processing thread
-                        else:
-                            var_name = node.attrib["var"]
-                            self.memory.vars[var_name] = var.get()
-                            print("Eva ram => ", self.memory.vars)
-                            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                            self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                            self.gui.terminal.see(tkinter.END)
-                            print("qrRead command USING VAR...")
-                            pop.destroy()
-                            self.unlock_thread_pop() # Reactivate the script processing thread
-                        
-                    # Window (self.gui) creation
-                    img_qr = PhotoImage(file = "images/img_qr.png")
-                    var = StringVar()
-                    pop = Toplevel(self.gui)
-                    pop.title("qrRead Command")
-                    # Disable the maximize and close buttons
-                    pop.resizable(False, False)
-                    pop.protocol("WM_DELETE_WINDOW", False)
-                    w = 350
-                    h = 200
-                    ws = self.gui.winfo_screenwidth()
-                    hs = self.gui.winfo_screenheight()
-                    x = (ws/2) - (w/2)
-                    y = (hs/2) - (h/2)  
-                    pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
-                    label = Label(pop, text="Eva is reading a QR Code... \nPlease, enter the information contained in the QRCode!", font = ('Arial', 10))
-                    label.pack(pady=20)
-                    Label(pop, image=img_qr).place(x = 260, y = 110)
-                    E1 = Entry(pop, textvariable = var, font = ('Arial', 10))
-                    E1.bind("<Return>", fechar_pop_ret)
-                    E1.pack()
-                    Button(pop, text="    OK    ", font = self.font1, command=fechar_pop_bt).pack(pady=20)
-                    # Wait for release, waiting for the user's response
-                    while self.thread_pop_pause: 
-                        time.sleep(0.5)
-                    self.ledAnimation("STOP")
-    
-        elif node.tag == "userID":
-            if self.RUNNING_MODE == "EVA_ROBOT": 
-                EVA_ROBOT_STATE = "BUSY"
-                self.client.publish(self.topic_base + "/userID", " ")
-                self.ledAnimation("LISTEN")
-                
-    
-                while (EVA_ROBOT_STATE != "FREE"):
-                    pass
-                
-                if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                    self.memory.var_dolar.append([self.EVA_DOLLAR, "<userID>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
+                # Window (self.gui) creation
+                img_qr = PhotoImage(file = "images/img_qr.png")
+                var = StringVar()
+                pop = Toplevel(self.gui)
+                pop.title("qrRead Command")
+                # Disable the maximize and close buttons
+                pop.resizable(False, False)
+                pop.protocol("WM_DELETE_WINDOW", False)
+                w = 350
+                h = 200
+                ws = self.gui.winfo_screenwidth()
+                hs = self.gui.winfo_screenheight()
+                x = (ws/2) - (w/2)
+                y = (hs/2) - (h/2)  
+                pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
+                label = Label(pop, text="Eva is reading a QR Code... \nPlease, enter the information contained in the QRCode!", font = ('Arial', 10))
+                label.pack(pady=20)
+                Label(pop, image=img_qr).place(x = 260, y = 110)
+                E1 = Entry(pop, textvariable = var, font = ('Arial', 10))
+                E1.bind("<Return>", fechar_pop_ret)
+                E1.pack()
+                Button(pop, text="    OK    ", font = self.font1, command=fechar_pop_bt).pack(pady=20)
+                # Wait for release, waiting for the user's response
+                while self.thread_pop_pause: 
+                    time.sleep(0.5)
+                self.ledAnimation("STOP")
+   
+    def command_userID(self, node):
+        if self.RUNNING_MODE == "EVA_ROBOT": 
+            EVA_ROBOT_STATE = "BUSY"
+            self.client.publish(self.topic_base + "/userID", " ")
+            self.ledAnimation("LISTEN")
+            
+
+            while (EVA_ROBOT_STATE != "FREE"):
+                pass
+            
+            if node.get("var") == None: # Maintains compatibility with the use of the $ variable
+                self.memory.var_dolar.append([self.EVA_DOLLAR, "<userID>"])
+                self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
+                self.tab_load_mem_dollar()
+                self.gui.terminal.see(tkinter.END)
+
+            else:
+                var_name = node.attrib["var"]
+                self.memory.vars[var_name] = self.EVA_DOLLAR
+                print("Eva ram => ", self.memory.vars)
+                self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
+                self.tab_load_mem_vars() # Enter data from variable memory into the var table
+                self.gui.terminal.see(tkinter.END)
+                print("userID command USING VAR...")
+            
+            self.ledAnimation("STOP")
+
+        else:
+        
+            self.lock_thread_pop()
+            self.ledAnimation("LISTEN")
+            if self.gui.chk_userid_value.get() == 1:
+            
+                result_recognition = fr.main()
+
+                var = StringVar(value=result_recognition)
+
+                if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
+                    self.memory.var_dolar.append([var.get(), "<userID>"])
+                    self.gui.terminal.insert(INSERT, "\nSTATE: userID : var=$" + ", value=" + self.memory.var_dolar[-1][0])
                     self.tab_load_mem_dollar()
                     self.gui.terminal.see(tkinter.END)
-    
+                
                 else:
                     var_name = node.attrib["var"]
-                    self.memory.vars[var_name] = self.EVA_DOLLAR
+                    self.memory.vars[var_name] = var.get()
                     print("Eva ram => ", self.memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                    self.tab_load_mem_vars() # Enter data from variable memory into the var table
+                    self.gui.terminal.insert(INSERT, "\nSTATE: userID : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
+                    self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
                     self.gui.terminal.see(tkinter.END)
-                    print("userID command USING VAR...")
-                
-                self.ledAnimation("STOP")
-    
-            else:
-            
-                self.lock_thread_pop()
-                self.ledAnimation("LISTEN")
-                if self.gui.chk_userid_value.get() == 1:
-                
-                    result_recognition = fr.main()
-    
-                    var = StringVar(value=result_recognition)
-    
+
+            elif self.gui.chk_userid_value.get() == 0:
+            # Pop up window closing function for the <return> key
+                def fechar_pop_ret(s): 
+                    print(var.get())
                     if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
                         self.memory.var_dolar.append([var.get(), "<userID>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userID : var=$" + ", value=" + self.memory.var_dolar[-1][0])
+                        self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                         self.tab_load_mem_dollar()
                         self.gui.terminal.see(tkinter.END)
-                    
+                        pop.destroy()
+                        self.unlock_thread_pop() # Reactivate the script processing thread
                     else:
                         var_name = node.attrib["var"]
                         self.memory.vars[var_name] = var.get()
                         print("Eva ram => ", self.memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userID : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
-                        self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
+                        self.gui.terminal.insert(INSERT, "\nSTATE: userID reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
+                        self.tab_load_mem_vars() # Enter data from variable memory into the var table
                         self.gui.terminal.see(tkinter.END)
-    
-                elif self.gui.chk_userid_value.get() == 0:
-                # Pop up window closing function for the <return> key
-                    def fechar_pop_ret(s): 
-                        print(var.get())
-                        if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                            self.memory.var_dolar.append([var.get(), "<userID>"])
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                            self.tab_load_mem_dollar()
-                            self.gui.terminal.see(tkinter.END)
-                            pop.destroy()
-                            self.unlock_thread_pop() # Reactivate the script processing thread
-                        else:
-                            var_name = node.attrib["var"]
-                            self.memory.vars[var_name] = var.get()
-                            print("Eva ram => ", self.memory.vars)
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userID reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                            self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                            self.gui.terminal.see(tkinter.END)
-                            print("userID command USING VAR...")
-                            pop.destroy()
-                            self.unlock_thread_pop() # Reactivate the script processing thread
+                        print("userID command USING VAR...")
+                        pop.destroy()
+                        self.unlock_thread_pop() # Reactivate the script processing thread
+                
+                # Pop up window closing function for OK button
+                def fechar_pop_bt(): 
+                    print(var.get())
+                    if node.get("var") == None: # Maintains compatibility with the use of the $ variable
+                        self.memory.var_dolar.append([var.get(), "<userID>"])
+                        self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
+                        self.tab_load_mem_dollar()
+                        self.gui.terminal.see(tkinter.END)
+                        pop.destroy()
+                        self.unlock_thread_pop() # Reactivate the script processing thread
+                    else:
+                        var_name = node.attrib["var"]
+                        self.memory.vars[var_name] = var.get()
+                        print("Eva ram => ", self.memory.vars)
+                        self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
+                        self.tab_load_mem_vars() # Enter data from variable memory into the var table
+                        self.gui.terminal.see(tkinter.END)
+                        print("userID command USING VAR...")
+                        pop.destroy()
+                        self.unlock_thread_pop() # Reactivate the script processing thread
                     
-                    # Pop up window closing function for OK button
-                    def fechar_pop_bt(): 
-                        print(var.get())
-                        if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                            self.memory.var_dolar.append([var.get(), "<userID>"])
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                            self.tab_load_mem_dollar()
-                            self.gui.terminal.see(tkinter.END)
-                            pop.destroy()
-                            self.unlock_thread_pop() # Reactivate the script processing thread
-                        else:
-                            var_name = node.attrib["var"]
-                            self.memory.vars[var_name] = var.get()
-                            print("Eva ram => ", self.memory.vars)
-                            self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                            self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                            self.gui.terminal.see(tkinter.END)
-                            print("userID command USING VAR...")
-                            pop.destroy()
-                            self.unlock_thread_pop() # Reactivate the script processing thread
-                        
-                    # Window (self.gui) creation
-                    img_userID = PhotoImage(file = "images/img_userID.png")
-                    var = StringVar()
-                    pop = Toplevel(self.gui)
-                    pop.title("userID Command")
-                    # Disable the maximize and close buttons
-                    pop.resizable(False, False)
-                    pop.protocol("WM_DELETE_WINDOW", False)
-                    w = 350
-                    h = 200
-                    ws = self.gui.winfo_screenwidth()
-                    hs = self.gui.winfo_screenheight()
-                    x = (ws/2) - (w/2)
-                    y = (hs/2) - (h/2)  
-                    pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
-                    label = Label(pop, text="Eva is recognizing a face... \nPlease, enter the user name!", font = ('Arial', 10))
-                    label.pack(pady=20)
-                    Label(pop, image=img_userID).place(x = 260, y = 110)
-                    E1 = Entry(pop, textvariable = var, font = ('Arial', 10))
-                    E1.bind("<Return>", fechar_pop_ret)
-                    E1.pack()
-                    Button(pop, text="    OK    ", font = self.font1, command=fechar_pop_bt).pack(pady=20)
-                    # Wait for release, waiting for the user's response
-                    while self.thread_pop_pause: 
-                        time.sleep(0.5)
-                    self.ledAnimation("STOP")
+                # Window (self.gui) creation
+                img_userID = PhotoImage(file = "images/img_userID.png")
+                var = StringVar()
+                pop = Toplevel(self.gui)
+                pop.title("userID Command")
+                # Disable the maximize and close buttons
+                pop.resizable(False, False)
+                pop.protocol("WM_DELETE_WINDOW", False)
+                w = 350
+                h = 200
+                ws = self.gui.winfo_screenwidth()
+                hs = self.gui.winfo_screenheight()
+                x = (ws/2) - (w/2)
+                y = (hs/2) - (h/2)  
+                pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
+                label = Label(pop, text="Eva is recognizing a face... \nPlease, enter the user name!", font = ('Arial', 10))
+                label.pack(pady=20)
+                Label(pop, image=img_userID).place(x = 260, y = 110)
+                E1 = Entry(pop, textvariable = var, font = ('Arial', 10))
+                E1.bind("<Return>", fechar_pop_ret)
+                E1.pack()
+                Button(pop, text="    OK    ", font = self.font1, command=fechar_pop_bt).pack(pady=20)
+                # Wait for release, waiting for the user's response
+                while self.thread_pop_pause: 
+                    time.sleep(0.5)
+                self.ledAnimation("STOP")
+    
+    # Virtual machine functions
+    # Execute the commands
+    def exec_comando(self, node):
+        global img_neutral, img_happy, img_angry, img_sad, img_surprise
+        
+        # Clear event at the end of the function
+        if self.step_execution: 
+            self.exec_comand_event.wait()
+
+        if node.tag == "voice":
+            self.command_voice(node)
+    
+    
+        if node.tag == "motion": # Movement of the head and arms
+            self.command_motion(node)
+    
+
+        elif node.tag == "light":
+            self.command_light
+    
+
+        elif node.tag == "wait":
+            self.command_wait(node)
+    
+    
+        elif node.tag == "led":
+            self.command_led(node)
+            
+    
+        elif node.tag == "mqtt":
+            self.command_mqtt(node)
+    
+    
+        elif node.tag == "random":
+            self.command_random(node)
+    
+    
+        elif node.tag == "listen":
+            self.command_listen(node)
+    
+    
+        elif node.tag == "talk": # Blocking function
+            self.command_talk(node)
+    
+    
+        elif node.tag == "evaEmotion":
+            self.command_evaEmotion(node)
+    
+    
+        elif node.tag == "audio":
+            self.command_audio(node)
+    
+    
+    ##########################################################
+        elif node.tag == "case": 
+            self.command_case(node)
+    
+        elif node.tag == "default": # Default is always true
+            print("Default = true")
+            self.memory.reg_case = 1 # Turn on the reg_case indicating that the comparison result was true
+    
+    
+        elif node.tag == "counter":
+            self.command_counter(node)
+    
+    
+        elif node.tag == "textEmotion":
+            self.command_textEmotion(node)
+    
+        elif node.tag == "userHandPose":
+            self.command_userHandPose(node)
+    
+        elif node.tag == "userEmotion":
+            self.command_userEmotion(node)
+    
+        elif node.tag == "qrRead":
+            self.command_qrRead(node)
+    
+        elif node.tag == "userID":
+            self.command_userID(node)
 
         if self.step_execution: 
             self.exec_comand_event.clear()
-
         self.sim_api_controller.trigger_event()
+
 
     def busca_commando(self, key : str): # The keys are strings
         # Search in settings. This is because "voice" is in settings and voice is always the first element
