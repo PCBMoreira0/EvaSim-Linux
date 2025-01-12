@@ -729,6 +729,13 @@ class EvaSim:
     def clear_waiting_input(self):
         self.isWaitingInput = False
 
+    def get_api_input(self):
+        self.set_waiting_input()
+        self.input_event.wait()
+        self.input_event.clear()
+        self.clear_waiting_input()
+        return self.api_sim_controller.get_input()
+
     def command_motion(self, node):
         if node.get("left-arm") != None: # Move the left arm
                 self.gui.terminal.insert(INSERT, "\nSTATE: Moving the left arm! Movement type => " + node.attrib["left-arm"], "motion")
@@ -800,6 +807,8 @@ class EvaSim:
             self.gui.terminal.see(tkinter.END) # Autoscrolling
         self.light(color , state)
 
+        self.sim_api_controller.command_light(color, state)
+
         if self.RUNNING_MODE == "EVA_ROBOT":
             self.client.publish(self.topic_base + "/light", color + "|" + state); # Command for the physical robot
         else:
@@ -815,6 +824,9 @@ class EvaSim:
     def command_led(self, node):
         # Selection of the execution mode is done within the ledAnimation() function
         self.ledAnimation(node.attrib["animation"])
+
+        self.sim_api_controller.command_led(node.attrib["animation"])
+
         self.gui.terminal.insert(INSERT, "\nSTATE: Matrix Leds. Animation = " + node.attrib["animation"])
         self.gui.terminal.see(tkinter.END) 
     
@@ -867,19 +879,15 @@ class EvaSim:
         self.ledAnimation("LISTEN")
         
         self.sim_api_controller.command_listen()
-        self.set_waiting_input()
-        self.input_event.wait()
-        self.input_event.clear()
-        self.clear_waiting_input()
+        
         # Window (self.gui) creation
         var = StringVar()
-        var.set(self.api_sim_controller.get_input())
+        var.set(self.get_api_input())
         if node.get("var") == None: # Maintains compatibility with the use of the $ variable
                 self.memory.var_dolar.append([var.get(), "<listen>"])
                 self.gui.terminal.insert(INSERT, "\nSTATE: Listening (language -> " + language_for_listen + ">: var = $" + ", value = " + self.memory.var_dolar[-1][0])
                 self.tab_load_mem_dollar()
                 self.gui.terminal.see(tkinter.END)
-                self.unlock_thread_pop() # Reactivate the script processing thread
         else:
             var_name = node.attrib["var"]
             self.memory.vars[var_name] = var.get()
@@ -888,8 +896,8 @@ class EvaSim:
             self.tab_load_mem_vars() # Enter data from variable memory into the var table
             self.gui.terminal.see(tkinter.END)
             print("Listen command USING VAR...")
-            self.unlock_thread_pop() # Reactivate the script processing thread
             
+        self.unlock_thread_pop() # Reactivate the script processing thread
         # Wait for release, waiting for the user's response
         while self.thread_pop_pause: 
             time.sleep(0.5)
@@ -1011,6 +1019,9 @@ class EvaSim:
     
     def command_evaEmotion(self, node):
         emotion = node.attrib["emotion"]
+
+        self.sim_api_controller.command_evaEmotion(emotion)
+
         if self.RUNNING_MODE == "EVA_ROBOT":
             self.client.publish(self.topic_base + "/evaEmotion", emotion) # Command for physical EVA
         self.gui.terminal.insert(INSERT, "\nSTATE: Expressing an emotion => " + emotion)
@@ -1020,6 +1031,9 @@ class EvaSim:
     def command_audio(self, node):
         sound_file =  node.attrib["source"]
         block = False # Audio self.play does not block script execution
+
+        self.sim_api_controller.command_audio(sound_file, node.attrib["block"])
+
         if node.attrib["block"] == "TRUE":
             block = True
         message_audio = '\nSTATE: self.playing a sound: "' + "audio_files/" + sound_file + ".wav" + '", block=' + str(block)
@@ -1323,446 +1337,120 @@ class EvaSim:
                 time.sleep(0.5)
    
     def command_userHandPose(self, node):
-        global img_thumbsup, img_thumbsdown, img_peace, img_open, img_three
-    
-        if self.gui.chk_handpose_value.get() == 1:
+        global img_thumbsup, img_thumbsdown, img_peace, img_open, img_three            
+        self.lock_thread_pop()
+        self.ledAnimation("LISTEN")
+        
+        self.sim_api_controller.command_userHandPose()
+        
+        var = StringVar()
+        var.set(self.get_api_input())
+        if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
+            self.memory.var_dolar.append([var.get(), "<userHandPose>"])
+            self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : var=$" + ", value=" + self.memory.var_dolar[-1][0])
+            self.tab_load_mem_dollar()
+            self.gui.terminal.see(tkinter.END)
+        else:
+            var_name = node.attrib["var"]
+            self.memory.vars[var_name] = var.get()
+            print("Eva ram => ", self.memory.vars)
+            self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
+            self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
+            self.gui.terminal.see(tkinter.END)
+
             
-            self.lock_thread_pop()
-            self.ledAnimation("LISTEN")
-            
-            result_pose = hp.run()
-
-
-            var = StringVar(value=result_pose)
-
-            if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                self.memory.var_dolar.append([var.get(), "<userHandPose>"])
-                self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : var=$" + ", value=" + self.memory.var_dolar[-1][0])
-                self.tab_load_mem_dollar()
-                self.gui.terminal.see(tkinter.END)
-            else:
-                var_name = node.attrib["var"]
-                self.memory.vars[var_name] = var.get()
-                print("Eva ram => ", self.memory.vars)
-                self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
-                self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
-                self.gui.terminal.see(tkinter.END)
-
-
-        elif self.gui.chk_handpose_value.get() == 0:    
-            self.lock_thread_pop()
-
-            def fechar_pop(): # função de fechamento da janela pop up
-                    print(var.get())
-                    if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                        self.memory.var_dolar.append([var.get(), "<userHandPose>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : var=$" + ", value=" + self.memory.var_dolar[-1][0])
-                        self.tab_load_mem_dollar()
-                        self.gui.terminal.see(tkinter.END)
-                    else:
-                        var_name = node.attrib["var"]
-                        self.memory.vars[var_name] = var.get()
-                        print("Eva ram => ", self.memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userHandPose : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
-                        self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
-                        self.gui.terminal.see(tkinter.END)
-                        print("userHandPose command USING VAR...")
-                    pop.destroy()
-                    self.ledAnimation("STOP")
-                    self.unlock_thread_pop() # reativa a thread de processamento do script
-
-            var = StringVar()
-            var.set("OPEN")
-            img_thumbsup = PhotoImage(file = "images/img_thumbsup.png")
-            img_thumbsdown = PhotoImage(file = "images/img_thumbsdown.png")
-            img_peace = PhotoImage(file = "images/img_peace.png")
-            img_open = PhotoImage(file = "images/img_open.png")
-            img_three = PhotoImage(file = "images/img_three.png")
-            pop = Toplevel(self.window)
-            pop.title("userHandPose Command")
-            # Disable the max and close buttons
-            pop.resizable(False, False)
-            pop.protocol("WM_DELETE_WINDOW", False)
-            w = 697
-            h = 250
-            ws = self.gui.winfo_screenwidth()
-            hs = self.gui.winfo_screenheight()
-            x = (ws/2) - (w/2)
-            y = (hs/2) - (h/2)  
-            pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
-            pop.grab_set() # faz com que a janela receba todos os eventos
-            Label(pop, text="Eva is analysing your hands. Please, choose one gesture!", font = ('Arial', 10)).place(x = 146, y = 10)
-            # imagens são exibidas usando os lables
-            Label(pop, image=img_thumbsup).place(x = 10, y = 50)
-            Label(pop, image=img_thumbsdown).place(x = 147, y = 50)
-            Label(pop, image=img_peace).place(x = 284, y = 50)
-            Label(pop, image=img_open).place(x = 421, y = 50)
-            Label(pop, image=img_three).place(x = 558, y = 50)
-            Radiobutton(pop, text = "Thumbs_UP", variable = var, font = self.font1, command = None, value = "THUMBS_UP").place(x = 25, y = 185)
-            Radiobutton(pop, text = "Thumbs_DOWN", variable = var, font = self.font1, command = None, value = "THUMBS_DOWN").place(x = 152, y = 185)
-            Radiobutton(pop, text = "Peace", variable = var, font = self.font1, command = None, value = "PEACE").place(x = 302, y = 185)
-            Radiobutton(pop, text = "Open", variable = var, font = self.font1, command = None, value = "OPEN").place(x = 442, y = 185)
-            Radiobutton(pop, text = "Three", variable = var, font = self.font1, command = None, value = "THREE").place(x = 575, y = 185)
-            Button(pop, text = "     OK     ", font = self.font1, command = fechar_pop).place(x = 310, y = 215)
-            # espera pela liberacao, aguardando a resposta do usuario
-            while self.thread_pop_pause: 
-                time.sleep(0.5)
-            self.ledAnimation("STOP")
+        self.unlock_thread_pop()
+        while self.thread_pop_pause: 
+            time.sleep(0.5)
+        self.ledAnimation("STOP")
     
     def command_userEmotion(self, node):
         # global img_neutral, img_happy, img_angry, img_sad, img_surprise, img_fear, img_desgust
             
-        if self.RUNNING_MODE == "EVA_ROBOT": 
-            self.client.publish(self.topic_base + "/log", "EVA is capturing the user emotion...")
-            self.EVA_ROBOT_STATE = "BUSY"
-            self.ledAnimation("LISTEN")
-            self.client.publish(self.topic_base + "/userEmotion", " ")
+        ###############
+        self.lock_thread_pop()
+        self.ledAnimation("LISTEN")
 
-            while (self.EVA_ROBOT_STATE != "FREE"):
-                pass
-            
-            if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                self.memory.var_dolar.append([self.EVA_DOLLAR, "<listen>"])
-                self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion: var=$" + ", value = " + self.memory.var_dolar[-1][0])
-                self.tab_load_mem_dollar()
-                self.gui.terminal.see(tkinter.END)
-                self.ledAnimation("STOP")
-            else:
-                var_name = node.attrib["var"]
-                self.memory.vars[var_name] = self.EVA_DOLLAR
-                print("Eva ram => ", self.memory.vars)
-                self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                self.tab_load_mem_vars() # Enter data from variable memory into the variable table
-                self.gui.terminal.see(tkinter.END)
-                print("userEmotion command USING VAR...")
-                self.ledAnimation("STOP")
+        self.sim_api_controller.command_userEmotion()
+        var = StringVar()
+        var.set(self.get_api_input())
+
+        print(var.get())
+        if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
+            self.memory.var_dolar.append([var.get(), "<userEmotion>"])
+            self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : var=$" + ", value=" + self.memory.var_dolar[-1][0])
+            self.tab_load_mem_dollar()
+            self.gui.terminal.see(tkinter.END)
         else:
-        
-            ###############
-            self.lock_thread_pop()
-            self.ledAnimation("LISTEN")
+            var_name = node.attrib["var"]
+            self.memory.vars[var_name] = var.get()
+            print("Eva ram => ", self.memory.vars)
+            self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
+            self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
+            self.gui.terminal.see(tkinter.END)
+            print("userEmotion command USING VAR...")
 
-            if self.gui.chk_emotion_value.get() == 1:
-                result_emotion = ue.run()
-
-                var = StringVar(value=result_emotion)
-                if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                    self.memory.var_dolar.append([var.get(), "<userEmotion>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : var=$" + ", value=" + self.memory.var_dolar[-1][0])
-                    self.tab_load_mem_dollar()
-                    self.gui.terminal.see(tkinter.END)
-                else:
-                    var_name = node.attrib["var"]
-                    self.memory.vars[var_name] = var.get()
-                    print("Eva ram => ", self.memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
-                    self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
-                    self.gui.terminal.see(tkinter.END)
-           
-            elif self.gui.chk_emotion_value.get() == 0:
-                def fechar_pop(): # função de fechamento da janela pop up
-                    print(var.get())
-                    if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                        self.memory.var_dolar.append([var.get(), "<userEmotion>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : var=$" + ", value=" + self.memory.var_dolar[-1][0])
-                        self.tab_load_mem_dollar()
-                        self.gui.terminal.see(tkinter.END)
-                    else:
-                        var_name = node.attrib["var"]
-                        self.memory.vars[var_name] = var.get()
-                        print("Eva ram => ", self.memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userEmotion : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
-                        self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
-                        self.gui.terminal.see(tkinter.END)
-                        print("userEmotion command USING VAR...")
-                    pop.destroy()
-                    self.ledAnimation("STOP")
-                    self.unlock_thread_pop() # reativa a thread de processamento do script
-
-                var = StringVar()
-                var.set("NEUTRAL")
-                img_neutral = PhotoImage(file = "images/img_neutral.png")
-                img_happy = PhotoImage(file = "images/img_happy.png")
-                img_angry = PhotoImage(file = "images/img_angry.png")
-                img_sad = PhotoImage(file = "images/img_sad.png")
-                img_surprise = PhotoImage(file = "images/img_surprise.png")
-                img_fear = PhotoImage(file = "images/img_fear.png")
-                img_disgust = PhotoImage(file = "images/img_disgust.png")
-                pop = Toplevel(self.gui)
-                pop.title("userEmotion Command")
-                # Disable the max and close buttons
-                pop.resizable(False, False)
-                pop.protocol("WM_DELETE_WINDOW", False)
-                w = 973
-                h = 250
-                ws = self.gui.winfo_screenwidth()
-                hs = self.gui.winfo_screenheight()
-                x = (ws/2) - (w/2)
-                y = (hs/2) - (h/2)  
-                pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
-                # pop.grab_set() # faz com que a janela receba todos os eventos
-                Label(pop, text="Eva is analysing your face expression. Please, choose one emotion!", font = ('Arial', 10)).place(x = 246, y = 10)
-                # imagens são exibidas usando os lables
-                Label(pop, image=img_neutral).place(x = 10, y = 50)
-                Label(pop, image=img_happy).place(x = 147, y = 50)
-                Label(pop, image=img_angry).place(x = 284, y = 50)
-                Label(pop, image=img_sad).place(x = 421, y = 50)
-                Label(pop, image=img_surprise).place(x = 558, y = 50)
-                Label(pop, image=img_fear).place(x = 695, y = 50)
-                Label(pop, image=img_disgust).place(x = 832, y = 50)
-                Radiobutton(pop, text = "Neutral", variable = var, font = self.font1, command = None, value = "NEUTRAL").place(x = 35, y = 185)
-                Radiobutton(pop, text = "Happy", variable = var, font = self.font1, command = None, value = "HAPPY").place(x = 172, y = 185)
-                Radiobutton(pop, text = "Angry", variable = var, font = self.font1, command = None, value = "ANGRY").place(x = 312, y = 185)
-                Radiobutton(pop, text = "Sad", variable = var, font = self.font1, command = None, value = "SAD").place(x = 452, y = 185)
-                Radiobutton(pop, text = "Surprise", variable = var, font = self.font1, command = None, value = "SURPRISE").place(x = 575, y = 185)
-                Radiobutton(pop, text = "Fear", variable = var, font = self.font1, command = None, value = "FEAR").place(x = 715, y = 185)
-                Radiobutton(pop, text = "Disgust", variable = var, font = self.font1, command = None, value = "DISGUST").place(x = 852, y = 185)
-                Button(pop, text = "     OK     ", font = self.font1, command = fechar_pop).place(x = 440, y = 215)
-                # espera pela liberacao, aguardando a resposta do usuario
-                while self.thread_pop_pause: 
-                    time.sleep(0.5)
+        self.unlock_thread_pop()
+        # espera pela liberacao, aguardando a resposta do usuario
+        while self.thread_pop_pause: 
+            time.sleep(0.5)
     
     def command_qrRead(self, node):
-        if self.RUNNING_MODE == "EVA_ROBOT": 
-            self.client.publish(self.topic_base + "/log", "EVA is capturing QR Code information...")
-            self.EVA_ROBOT_STATE = "BUSY"
-            self.client.publish(self.topic_base + "/qrRead", " ")
-            self.ledAnimation("LISTEN")
-            
-
-            while (self.EVA_ROBOT_STATE != "FREE"):
-                pass
-            
-            
-            if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                self.memory.var_dolar.append([self.EVA_DOLLAR, "<qrRead>"])
-                self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                self.tab_load_mem_dollar()
-                self.gui.terminal.see(tkinter.END)
-                self.ledAnimation("STOP")
-            else:
-                var_name = node.attrib["var"]
-                self.memory.vars[var_name] = self.EVA_DOLLAR
-                print("Eva ram => ", self.memory.vars)
-                self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                self.gui.terminal.see(tkinter.END)
-                print("qrRead command USING VAR...")
-            self.ledAnimation("STOP")
-
+        
+        self.lock_thread_pop()
+        self.ledAnimation("LISTEN")          
+        
+        self.sim_api_controller.command_qrRead()
+        var = StringVar()
+        var.set(self.get_api_input())
+        print(var.get())
+        if node.get("var") == None: # Maintains compatibility with the use of the $ variable
+            self.memory.var_dolar.append([var.get(), "<qrRead>"])
+            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
+            self.tab_load_mem_dollar()
+            self.gui.terminal.see(tkinter.END)
+            self.unlock_thread_pop() # Reactivate the script processing thread
         else:
-            self.lock_thread_pop()
-            self.ledAnimation("LISTEN")
-            if self.gui.chk_qrRead_value.get() == 1:
-            
-                result_qr = qr.main()
+            var_name = node.attrib["var"]
+            self.memory.vars[var_name] = var.get()
+            print("Eva ram => ", self.memory.vars)
+            self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
+            self.tab_load_mem_vars() # Enter data from variable memory into the var table
+            self.gui.terminal.see(tkinter.END)
+            print("qrRead command USING VAR...")
 
-                var = StringVar(value=result_qr)
-
-                if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                    self.memory.var_dolar.append([var.get(), "<qrRead>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: qrRead : var=$" + ", value=" + self.memory.var_dolar[-1][0])
-                    self.tab_load_mem_dollar()
-                    self.gui.terminal.see(tkinter.END)
-                else:
-                    var_name = node.attrib["var"]
-                    self.memory.vars[var_name] = var.get()
-                    print("Eva ram => ", self.memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: qrRead : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
-                    self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
-                    self.gui.terminal.see(tkinter.END)
-
-            elif self.gui.chk_qrRead_value.get() == 0:
-            
-                # Pop up window closing function for the <return> key
-                def fechar_pop_ret(s): 
-                    print(var.get())
-                    if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                        self.memory.var_dolar.append([var.get(), "<qrRead>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                        self.tab_load_mem_dollar()
-                        self.gui.terminal.see(tkinter.END)
-                        pop.destroy()
-                        self.unlock_thread_pop() # Reactivate the script processing thread
-                    else:
-                        var_name = node.attrib["var"]
-                        self.memory.vars[var_name] = var.get()
-                        print("Eva ram => ", self.memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                        self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                        self.gui.terminal.see(tkinter.END)
-                        print("qrRead command USING VAR...")
-                        pop.destroy()
-                        self.unlock_thread_pop() # Reactivate the script processing thread
-                
-                # Pop up window closing function for OK button
-                def fechar_pop_bt(): 
-                    print(var.get())
-                    if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                        self.memory.var_dolar.append([var.get(), "<qrRead>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                        self.tab_load_mem_dollar()
-                        self.gui.terminal.see(tkinter.END)
-                        pop.destroy()
-                        self.unlock_thread_pop() # Reactivate the script processing thread
-                    else:
-                        var_name = node.attrib["var"]
-                        self.memory.vars[var_name] = var.get()
-                        print("Eva ram => ", self.memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: QR Code reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                        self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                        self.gui.terminal.see(tkinter.END)
-                        print("qrRead command USING VAR...")
-                        pop.destroy()
-                        self.unlock_thread_pop() # Reactivate the script processing thread
-                    
-                # Window (self.gui) creation
-                img_qr = PhotoImage(file = "images/img_qr.png")
-                var = StringVar()
-                pop = Toplevel(self.gui)
-                pop.title("qrRead Command")
-                # Disable the maximize and close buttons
-                pop.resizable(False, False)
-                pop.protocol("WM_DELETE_WINDOW", False)
-                w = 350
-                h = 200
-                ws = self.gui.winfo_screenwidth()
-                hs = self.gui.winfo_screenheight()
-                x = (ws/2) - (w/2)
-                y = (hs/2) - (h/2)  
-                pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
-                label = Label(pop, text="Eva is reading a QR Code... \nPlease, enter the information contained in the QRCode!", font = ('Arial', 10))
-                label.pack(pady=20)
-                Label(pop, image=img_qr).place(x = 260, y = 110)
-                E1 = Entry(pop, textvariable = var, font = ('Arial', 10))
-                E1.bind("<Return>", fechar_pop_ret)
-                E1.pack()
-                Button(pop, text="    OK    ", font = self.font1, command=fechar_pop_bt).pack(pady=20)
-                # Wait for release, waiting for the user's response
-                while self.thread_pop_pause: 
-                    time.sleep(0.5)
-                self.ledAnimation("STOP")
+        self.unlock_thread_pop()
+        # Wait for release, waiting for the user's response
+        while self.thread_pop_pause: 
+            time.sleep(0.5)
+        self.ledAnimation("STOP")
    
     def command_userID(self, node):
-        if self.RUNNING_MODE == "EVA_ROBOT": 
-            EVA_ROBOT_STATE = "BUSY"
-            self.client.publish(self.topic_base + "/userID", " ")
-            self.ledAnimation("LISTEN")
-            
-
-            while (EVA_ROBOT_STATE != "FREE"):
-                pass
-            
-            if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                self.memory.var_dolar.append([self.EVA_DOLLAR, "<userID>"])
-                self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                self.tab_load_mem_dollar()
-                self.gui.terminal.see(tkinter.END)
-
-            else:
-                var_name = node.attrib["var"]
-                self.memory.vars[var_name] = self.EVA_DOLLAR
-                print("Eva ram => ", self.memory.vars)
-                self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                self.gui.terminal.see(tkinter.END)
-                print("userID command USING VAR...")
-            
-            self.ledAnimation("STOP")
-
-        else:
+        self.lock_thread_pop()
+        self.ledAnimation("LISTEN")
         
-            self.lock_thread_pop()
-            self.ledAnimation("LISTEN")
-            if self.gui.chk_userid_value.get() == 1:
-            
-                result_recognition = fr.main()
-
-                var = StringVar(value=result_recognition)
-
-                if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                    self.memory.var_dolar.append([var.get(), "<userID>"])
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userID : var=$" + ", value=" + self.memory.var_dolar[-1][0])
-                    self.tab_load_mem_dollar()
-                    self.gui.terminal.see(tkinter.END)
+        var = StringVar()
+        var.set(self.get_api_input())
+        print(var.get())
+        if node.get("var") == None: # Maintains compatibility with the use of the $ variable
+            self.memory.var_dolar.append([var.get(), "<userID>"])
+            self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
+            self.tab_load_mem_dollar()
+            self.gui.terminal.see(tkinter.END)
+        else:
+            var_name = node.attrib["var"]
+            self.memory.vars[var_name] = var.get()
+            print("Eva ram => ", self.memory.vars)
+            self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
+            self.tab_load_mem_vars() # Enter data from variable memory into the var table
+            self.gui.terminal.see(tkinter.END)
+            print("userID command USING VAR...")
                 
-                else:
-                    var_name = node.attrib["var"]
-                    self.memory.vars[var_name] = var.get()
-                    print("Eva ram => ", self.memory.vars)
-                    self.gui.terminal.insert(INSERT, "\nSTATE: userID : (using the user variable '" + var_name + "'): " + self.EVA_DOLLAR)
-                    self.tab_load_mem_vars() # entra com os dados da memoria de variaveis na tabela de vars
-                    self.gui.terminal.see(tkinter.END)
-
-            elif self.gui.chk_userid_value.get() == 0:
-            # Pop up window closing function for the <return> key
-                def fechar_pop_ret(s): 
-                    print(var.get())
-                    if node.get("var") == None: # mantém a compatibilidade com o uso da variável $
-                        self.memory.var_dolar.append([var.get(), "<userID>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                        self.tab_load_mem_dollar()
-                        self.gui.terminal.see(tkinter.END)
-                        pop.destroy()
-                        self.unlock_thread_pop() # Reactivate the script processing thread
-                    else:
-                        var_name = node.attrib["var"]
-                        self.memory.vars[var_name] = var.get()
-                        print("Eva ram => ", self.memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userID reading (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                        self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                        self.gui.terminal.see(tkinter.END)
-                        print("userID command USING VAR...")
-                        pop.destroy()
-                        self.unlock_thread_pop() # Reactivate the script processing thread
-                
-                # Pop up window closing function for OK button
-                def fechar_pop_bt(): 
-                    print(var.get())
-                    if node.get("var") == None: # Maintains compatibility with the use of the $ variable
-                        self.memory.var_dolar.append([var.get(), "<userID>"])
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userID: var = $" + ", value = " + self.memory.var_dolar[-1][0])
-                        self.tab_load_mem_dollar()
-                        self.gui.terminal.see(tkinter.END)
-                        pop.destroy()
-                        self.unlock_thread_pop() # Reactivate the script processing thread
-                    else:
-                        var_name = node.attrib["var"]
-                        self.memory.vars[var_name] = var.get()
-                        print("Eva ram => ", self.memory.vars)
-                        self.gui.terminal.insert(INSERT, "\nSTATE: userID (using the user variable '" + var_name + "'): " + str(self.memory.vars[var_name]))
-                        self.tab_load_mem_vars() # Enter data from variable memory into the var table
-                        self.gui.terminal.see(tkinter.END)
-                        print("userID command USING VAR...")
-                        pop.destroy()
-                        self.unlock_thread_pop() # Reactivate the script processing thread
-                    
-                # Window (self.gui) creation
-                img_userID = PhotoImage(file = "images/img_userID.png")
-                var = StringVar()
-                pop = Toplevel(self.gui)
-                pop.title("userID Command")
-                # Disable the maximize and close buttons
-                pop.resizable(False, False)
-                pop.protocol("WM_DELETE_WINDOW", False)
-                w = 350
-                h = 200
-                ws = self.gui.winfo_screenwidth()
-                hs = self.gui.winfo_screenheight()
-                x = (ws/2) - (w/2)
-                y = (hs/2) - (h/2)  
-                pop.geometry('%dx%d+%d+%d' % (w, h, x, y))
-                label = Label(pop, text="Eva is recognizing a face... \nPlease, enter the user name!", font = ('Arial', 10))
-                label.pack(pady=20)
-                Label(pop, image=img_userID).place(x = 260, y = 110)
-                E1 = Entry(pop, textvariable = var, font = ('Arial', 10))
-                E1.bind("<Return>", fechar_pop_ret)
-                E1.pack()
-                Button(pop, text="    OK    ", font = self.font1, command=fechar_pop_bt).pack(pady=20)
-                # Wait for release, waiting for the user's response
-                while self.thread_pop_pause: 
-                    time.sleep(0.5)
-                self.ledAnimation("STOP")
+        self.unlock_thread_pop()
+        # Wait for release, waiting for the user's response
+        while self.thread_pop_pause: 
+            time.sleep(0.5)
+        self.ledAnimation("STOP")
     
     # Virtual machine functions
     # Execute the commands
@@ -1923,6 +1611,9 @@ class EvaSim:
         # Restore the buttons states (run and stop)
         self.gui.bt_run_sim['state'] = NORMAL
         self.gui.bt_run_sim.bind("<Button-1>", self.setSimMode)
+
+        self.stopScript(None)
+
         if ROBOT_MODE_ENABLED: self.gui.bt_run_robot['state'] = NORMAL
         self.gui.bt_run_robot.bind("<Button-1>", self.setEVAMode)
         self.gui.bt_import['state'] = NORMAL

@@ -52,15 +52,18 @@ async def next(id:str):
     if id not in get_dict():
         return {"status":"key not found"}
     
+    s = {}
+    
     c = get_value(id)
 
     if c.eva_sim.isWaitingInput:
-        return {"status":"waiting input"}
-
-    if not c.api_sim.next_step(c.eva_sim):
-        return {"status":"script is not playing"}
+            return {"status":"waiting input"}
     
-    s = await c.sim_api.get_result()
+    while not s:
+        if not c.api_sim.next_step(c.eva_sim):
+            return {"status":"script is not playing"}
+
+        s = await c.sim_api.get_result()
 
     return s
 
