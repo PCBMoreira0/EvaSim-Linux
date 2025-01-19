@@ -20,9 +20,9 @@ router = APIRouter(prefix="/sim", tags=["Simulator"])
 def init():
     sim_id = uuid.uuid1()
     add_new_intance(str(sim_id))
-    return sim_id
+    return {"uuid": sim_id}
 
-@router.put("/import/{id}")
+@router.post("/import/{id}")
 def import_file(id : str, path : str):
     from experiences.experiences import get_path
 
