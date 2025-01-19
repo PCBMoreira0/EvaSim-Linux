@@ -1,3 +1,4 @@
+import time
 from typing import Dict
 from eva_sim import EvaSim
 from controllers.sim_api_controller import SIM_APIController
@@ -22,6 +23,9 @@ def add_new_intance(id : str):
     e = EvaSim(c, a, "Simulador " + str(total_ids), True)
     sim_dicts[id] = ControllerData(e, c, a)
     put_to_queue(e)
+    while(e.gui is None): # verifica se o gui foi criado, pois caso chame um endpoint que o opere dará erro
+        time.sleep(0.5)
+
     total_ids += 1
 
 def get_dict():

@@ -182,6 +182,8 @@ class EvaSim:
         self.step_execution = step_execution
         self.isWaitingInput = False
 
+        # TKinter gui
+        self.gui = None # Se for None então a UI não foi inicializada ainda (só é inicializada ao chamar init_sim)
 
     def init_sim(self, root : Tk):
         # Create the Tkinter window
@@ -336,11 +338,12 @@ class EvaSim:
         self.gui.bt_reload['state'] = DISABLED
         self.gui.bt_reload.bind("<Button-1>", self.reloadFile)
         self.evaMatrix("white")
-        while self.gui.bt_run_sim['state'] == DISABLED: # Matrix light animation on stand by
-            self.evaMatrix("white")
-            time.sleep(0.5)
-            self.evaMatrix("grey")
-            time.sleep(0.5)
+        # ERROR when closing simulator window, so I commented it
+        # while self.gui.bt_run_sim['state'] == DISABLED: # Matrix light animation on stand by
+        #     self.evaMatrix("white")
+        #     time.sleep(0.5)
+        #     self.evaMatrix("grey")
+        #     time.sleep(0.5)
 
 
     # Eva powerOn function
