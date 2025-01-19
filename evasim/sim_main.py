@@ -10,6 +10,7 @@ root = Tk()
 def get_root():
     return root
 
+# Tentar usar eventos tkinter?
 def process_queue():
     """Processa as tarefas da fila na thread principal."""
     try:
@@ -25,7 +26,7 @@ def process_queue():
 
 def run_uvicorn():
     import uvicorn
-    uvicorn.run("eva_api.main:app", host="127.0.0.1", port=8000)
+    uvicorn.run("eva_api.main:app", host="0.0.0.0", port=8000)
 
 
 if __name__ == "__main__":
