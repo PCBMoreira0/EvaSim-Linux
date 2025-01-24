@@ -39,18 +39,8 @@ class SIM_APIController:
     def command_motion(self, attrib : str, detail : str):
         attrib = attrib.lower()
         command = {"command" : Commands.MOTION.value}
-        if attrib == "left-arm":
-            command["left-arm"] = detail
-
-        if attrib == "right-arm":
-            command["right-arm"] = detail
-
-        if attrib == "head":
-            command["head"] = detail
-        else:
-            if attrib == "type":
-                command["type"] = detail
-
+        command["member"] = attrib
+        command["direction"] = detail
         self.current_command.update(command)
 
     def command_talk(self, text : str):
