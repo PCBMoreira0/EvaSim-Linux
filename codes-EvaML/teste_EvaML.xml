@@ -1,0 +1,37 @@
+<evaml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="teste" xsi:noNamespaceSchemaLocation="evaml-schema/evaml_schema.xsd" id="698dc19d489c4e4db73e28a713eab07b">
+  <settings>
+    <voice tone="pt-BR_IsabelaV3Voice" key="1000" />
+    <lightEffects mode="ON" />
+    <audioEffects mode="ON" />
+  </settings>
+  <script>
+    <evaEmotion emotion="HAPPY" key="1001" />
+    <talk key="1002">Olá! Tudo bem?</talk>
+    <evaEmotion emotion="SAD" key="1003" />
+    <talk key="1004">Pra mim não está tudo bem...</talk>
+    <evaEmotion emotion="ANGRY" key="1005" />
+    <evaEmotion emotion="FEAR" key="1006" />
+    <talk key="1007">Será que está tudo bem?</talk>
+    <evaEmotion emotion="SURPRISE" key="1008" />
+    <evaEmotion emotion="DISGUST" key="1009" />
+    <evaEmotion emotion="INLOVE" key="1010" />
+    <talk key="1011">Sim!</talk>
+    <motion head="YES" key="1012" />
+    <motion head="2UP" key="1013" />
+    <talk key="1014">Levanta a cabeça</talk>
+    <motion head="2DOWN" key="1015" />
+    <motion head="NO" key="1016" />
+    <motion head="LEFT" key="1017" />
+    <talk key="1018">Vira a cabeça</talk>
+    <motion head="2DOWN" key="1019" />
+    <motion head="RIGHT" key="1020" />
+    <talk key="1021">Olha pro lado</talk>
+    <motion head="2UP" key="1022" />
+    <motion left-arm="POSITION 1" key="1023" />
+    <talk key="1024">Levanta o braço</talk>
+    <motion right-arm="POSITION 2" key="1025" />
+    <motion left-arm="SHAKE1" key="1026" />
+    <talk key="1027">Mexe o braço!</talk>
+    <motion right-arm="SHAKE2" key="1028" />
+  </script>
+<links><link from="1000" to="1001" /><link from="1001" to="1002" /><link from="1002" to="1003" /><link from="1003" to="1004" /><link from="1004" to="1005" /><link from="1005" to="1006" /><link from="1006" to="1007" /><link from="1007" to="1008" /><link from="1008" to="1009" /><link from="1009" to="1010" /><link from="1010" to="1011" /><link from="1011" to="1012" /><link from="1012" to="1013" /><link from="1013" to="1014" /><link from="1014" to="1015" /><link from="1015" to="1016" /><link from="1016" to="1017" /><link from="1017" to="1018" /><link from="1018" to="1019" /><link from="1019" to="1020" /><link from="1020" to="1021" /><link from="1021" to="1022" /><link from="1022" to="1023" /><link from="1023" to="1024" /><link from="1024" to="1025" /><link from="1025" to="1026" /><link from="1026" to="1027" /><link from="1027" to="1028" /></links></evaml>
