@@ -1,5 +1,8 @@
-from fastapi import APIRouter
+from datetime import datetime
+from fastapi import APIRouter, HTTPException
 import uuid
+
+from fastapi.responses import FileResponse, StreamingResponse
 from eva_sim import EvaSim
 from controllers.api_sim_controller import API_SIMController
 from controllers.sim_api_controller import SIM_APIController
@@ -8,11 +11,17 @@ from ..users.users import add_new_intance, get_dict, remove_dict, get_value
 from task_queue import put_to_queue
 from pydantic import BaseModel
 
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
+
+from io import BytesIO
+
 import os
 
 class InputModel(BaseModel):
     input : str
 
+executor = ThreadPoolExecutor(max_workers=4)
 
 router = APIRouter(prefix="/sim", tags=["Simulator"])
 
@@ -27,7 +36,7 @@ def import_file(id : str, path : str):
     from experiences.experiences import get_path
 
     if not os.path.exists(get_path(path)):
-        return {"status":"file not found"}
+        raise HTTPException(status_code=404, detail="File not found")
     
     c = get_value(id)
     c.api_sim.importFile(c.eva_sim, path)
@@ -97,6 +106,66 @@ def delete_sim(id : str):
 
     return {"status": "success"}
 
+@router.get("/audio/{name}", response_class=FileResponse)
+def get_audio(name : str):
+    audio_path= "../evasim/audio_files/" + name + ".wav"
+    if os.path.exists(audio_path):
+        return FileResponse(audio_path, media_type="audio/wav")
+    else:
+        raise HTTPException(status_code=404, detail="File not found")
+
 @router.get("/dicts")
 def dicts():
     return get_dict()
+
+
+def inference_tts(text : str):
+    import numpy as np
+    from onnxruntime import InferenceSession
+    import json
+
+    # You can generate token ids as follows:
+    #   1. Convert input text to phonemes using https://github.com/hexgrad/misaki
+    #   2. Map phonemes to ids using https://huggingface.co/hexgrad/Kokoro-82M/blob/785407d1adfa7ae8fbef8ffd85f34ca127da3039/config.json#L34-L148
+ 
+    # Carregar JSON de mapeamento
+    with open("../evasim/tts/phoemes.json", "r", encoding="utf-8") as f:
+        phoneme_to_id = json.load(f)
+
+    from misaki import en
+
+    g2p = en.G2P(trf=False, british=False, fallback=None) # no transformer, American English
+
+    phonemes, tokens = g2p(text)
+    tokens = [phoneme_to_id["vocab"].get(p, 0) for p in phonemes]
+
+    # Context length is 512, but leave room for the pad token 0 at the start & end
+    assert len(tokens) <= 510, len(tokens)
+
+    # Style vector based on len(tokens), ref_s has shape (1, 256)
+    voices = np.fromfile('../evasim/tts/voices/af.bin', dtype=np.float32).reshape(-1, 1, 256)
+    ref_s = voices[len(tokens)]
+
+    # Add the pad ids, and reshape tokens, should now have shape (1, <=512)
+    tokens = [[0, *tokens, 0]]
+
+    model_name = 'model_q8f16.onnx' # Options: model.onnx, model_fp16.onnx, model_quantized.onnx, model_q8f16.onnx, model_uint8.onnx, model_uint8f16.onnx, model_q4.onnx, model_q4f16.onnx
+    sess = InferenceSession(os.path.join('../evasim/tts/onnx', model_name))
+
+    audio = sess.run(None, dict(
+        input_ids=tokens,
+        style=ref_s,
+        speed=np.array([0.8], dtype=np.float32),
+    ))[0]
+
+    import scipy.io.wavfile as wavfile
+    buffer = BytesIO()
+    wavfile.write(buffer, 24000, audio[0])
+    buffer.seek(0)
+    return buffer
+
+@router.post("/tts")
+async def get_tts(input : InputModel):
+    loop = asyncio.get_event_loop()
+    audio = await loop.run_in_executor(executor, inference_tts, input.input)
+    return StreamingResponse(audio, media_type="audio/wav")

@@ -1,0 +1,16 @@
+fastapi
+ibm_cloud_sdk_core
+ibm_watson
+mediapipe
+misaki
+numpy
+onnxruntime
+opencv_contrib_python
+paho_mqtt
+pydantic
+pyzbar
+Request
+scipy
+tensorflow
+uvicorn
+xmlschema
