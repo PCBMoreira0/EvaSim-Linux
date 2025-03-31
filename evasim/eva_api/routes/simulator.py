@@ -3,6 +3,8 @@ from fastapi import APIRouter, HTTPException
 import uuid
 
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import UploadFile
+from fastapi import UploadFile
 from eva_sim import EvaSim
 from controllers.api_sim_controller import API_SIMController
 from controllers.sim_api_controller import SIM_APIController
@@ -15,6 +17,9 @@ from concurrent.futures import ThreadPoolExecutor
 import asyncio
 
 from io import BytesIO
+
+
+import speech_recognition
 
 import os
 
@@ -119,6 +124,7 @@ def dicts():
     return get_dict()
 
 
+#TTS
 def inference_tts(text : str):
     import numpy as np
     from onnxruntime import InferenceSession
@@ -164,8 +170,40 @@ def inference_tts(text : str):
     buffer.seek(0)
     return buffer
 
-@router.post("/tts")
+@router.post("/tts/inference")
 async def get_tts(input : InputModel):
     loop = asyncio.get_event_loop()
     audio = await loop.run_in_executor(executor, inference_tts, input.input)
     return StreamingResponse(audio, media_type="audio/wav")
+
+
+def process_stt(file):
+    r = speech_recognition.Recognizer()
+
+    audio_data = BytesIO(file)
+
+    with speech_recognition.AudioFile(audio_data) as source:
+        audio = r.record(source)
+
+    # recognize speech using Google Speech Recognition
+    try:
+        # for testing purposes, we're just using the default API key
+        # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
+        # instead of `r.recognize_google(audio)` 
+        result = r.recognize_google(audio)
+        if result is None: 
+            return {"error":"Could not transcribe the audio"}
+        return {"result":result}
+    except speech_recognition.UnknownValueError:
+        {"error":"Google Speech Recognition could not understand audio"}
+    except speech_recognition.RequestError as e:
+        {"error":"Could not request results from Google Speech Recognition service; {0}".format(e)}
+
+
+#STT
+@router.post("/stt")
+async def get_stt(file : UploadFile):
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(executor, process_stt, await file.read())
+    
+    return result
