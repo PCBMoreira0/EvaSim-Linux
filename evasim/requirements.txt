@@ -1,0 +1,17 @@
+fastapi
+ibm_cloud_sdk_core
+ibm_watson
+mediapipe
+misaki
+numpy
+onnxruntime
+paho_mqtt
+pydantic
+pyzbar
+scipy
+tensorflow
+uvicorn
+SpeechRecognition
+python-multipart
+num2words
+spacy
