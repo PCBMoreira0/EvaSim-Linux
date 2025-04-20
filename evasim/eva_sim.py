@@ -1061,14 +1061,14 @@ class EvaSim:
                         pass
                 else:
                     print(sound_file)
-                    self.playsound("audio_files/" + sound_file + ".wav", block = block)
+                    # self.playsound("audio_files/" + sound_file + ".wav", block = block)
 
             else: # Block = False
                 if self.RUNNING_MODE == "EVA_ROBOT":
                     self.client.publish(self.topic_base + "/log", "EVA will self.play a sound in no-blocking mode.")
                     self.client.publish(self.topic_base + "/audio", sound_file + "|" + "FALSE")
-                else:
-                    self.playsound("audio_files/" + sound_file + ".wav", block = block) 
+                # else:
+                    # self.playsound("audio_files/" + sound_file + ".wav", block = block) 
         except Exception as e:
             # Handle an exception. I didn't find any exceptions in the library documentation
             error_string = "\nError -> " + str(e) + "."
