@@ -229,5 +229,24 @@ def run():
     cv2.destroyAllWindows()
     return response
 
+
+def run_from_image(file):
+    response = None
+
+    # Decodifica o arquivo para imagem
+    nparr = np.frombuffer(file, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    if image is not None:
+        frame, prediction = inference(cv2.flip(image, 1))
+        face[prediction] += 1
+        result = evaluate(face).upper()
+        if result != '':
+            print(f"-> Published '{result}'")
+            response = result
+        reset_evaluation()
+
+    return response
+
 if __name__ == "__main__":
     run()

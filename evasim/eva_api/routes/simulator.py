@@ -207,3 +207,12 @@ async def get_stt(file : UploadFile):
     result = await loop.run_in_executor(executor, process_stt, await file.read())
     
     return result
+
+#user emotion
+@router.post("/emotion")
+async def get_emotion(file : UploadFile):
+    from emotion_recognition import emotion
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(executor, emotion.run_from_image, await file.read())
+    
+    return {"result": result}
