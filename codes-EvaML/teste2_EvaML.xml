@@ -1,0 +1,220 @@
+<evaml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="teste2" xsi:noNamespaceSchemaLocation="evaml-schema/evaml_schema.xsd" id="38851536d87701d2191990e24a7f8d4e">
+  <settings>
+    <voice tone="pt-BR_IsabelaV3Voice" key="1000" />
+    <lightEffects mode="ON" />
+    <audioEffects mode="ON" />
+  </settings>
+  <script>
+    <talk key="1001">Olaa meu nome é Eva, vamos jogar um jogo de charada?</talk>
+    <talk key="1002">apresente o cartão da sua resposta.</talk>
+    <qrRead var="resposta" key="1003" />
+    <switch var="resposta">
+      <case op="exact" value="não" key="1004" child_proc="true" var="resposta">
+        <talk key="1005">foi legal conhecer você,até a próxima!</talk>
+      </case>
+      <case op="exact" value="sim" key="1006" child_proc="true" var="resposta">
+        <evaEmotion emotion="HAPPY" key="1007" />
+        <talk key="1008">Que bom que vamos jogar juntos!</talk>
+      </case>
+    <default key="1009" child_proc="false" value="" op="exact" /></switch>
+    <light state="ON" color="WHITE" id="volta" key="1010" />
+    <evaEmotion emotion="NEUTRAL" key="1011" />
+    <talk key="1012">Quero ver se você conhece bem os equipamentos da casa da descoberta.</talk>
+    <talk key="1013">eu vou fazer uma charada e você irá apresentar o cartão que você acha que é a resposta.</talk>
+    <audio source="efx-mario-start-01" block="TRUE" key="1014" />
+    <counter var="ITERATION_VAR1" op="=" value="1" key="1015" /><switch id="LOOP_ID1_ITERATION_VAR1" var="ITERATION_VAR1"><case op="lte" value="7" key="1016" child_proc="true" var="ITERATION_VAR1"><random min="1" max="8" key="1017" />
+      <switch var="$">
+        <case op="eq" value="1" key="1018" child_proc="true" var="$">
+          <talk key="1019">o que é? o que é? Utilizamos para fechar o circuito elétrico na pilha humana</talk>
+      <qrRead var="resposta1" key="1020" />
+      <switch var="resposta1">
+        <case op="exact" value="pilhahumana" key="1021" child_proc="true" var="resposta1">
+          <evaEmotion emotion="HAPPY" key="1022" />
+          <audio source="efx-blin2" block="TRUE" key="1023" />
+          <light state="ON" color="GREEN" key="1024" />
+          <talk key="1025">Muito bem,com suas mãos você conseguiu fechar o circuito.</talk>
+          <evaEmotion emotion="NEUTRAL" key="1026" />
+          <light state="OFF" key="1027" />
+        </case>
+        <default key="1028" child_proc="true" value="" op="exact">
+          <evaEmotion emotion="SAD" key="1029" />
+          <audio source="efx-error" block="TRUE" key="1030" />
+          <light state="ON" color="RED" key="1031" />
+          <evaEmotion emotion="NEUTRAL" key="1032" />
+          <talk key="1033">Pôxa,você precisa voltar para o experimento da pilha humana.</talk>
+          <light state="OFF" key="1034" />
+        </default>
+      </switch>
+    </case>
+        <case op="eq" value="2" key="1035" child_proc="true" var="$">
+          <talk key="1036">o que é? o que é? neste experimento,quando soltamos duas bolas,outras duas são levantadas.</talk>
+      <qrRead var="resposta2" key="1037" />
+      <switch var="resposta2">
+        <case op="exact" value="pendulo" key="1038" child_proc="true" var="resposta2">
+          <evaEmotion emotion="HAPPY" key="1039" />
+          <audio source="efx-blin2" block="TRUE" key="1040" />
+          <light state="ON" color="GREEN" key="1041" />
+          <talk key="1042">Parabéns!Newton está orgulhoso de você.</talk> 
+          <evaEmotion emotion="NEUTRAL" key="1043" />
+          <light state="OFF" key="1044" />              
+        </case>
+        <default key="1045" child_proc="true" value="" op="exact">
+          <evaEmotion emotion="SAD" key="1046" />
+          <audio source="efx-error" block="TRUE" key="1047" />
+          <light state="ON" color="RED" key="1048" />
+          <evaEmotion emotion="NEUTRAL" key="1049" />
+          <talk key="1050">Você deveria testar o experimento do pêndulo de newton mais uma vez</talk>
+          <light state="OFF" key="1051" />
+        </default>
+      </switch>
+
+    </case>
+        <case op="eq" value="3" key="1052" child_proc="true" var="$">
+          <talk key="1053">o que é?o que é?, Quando dizem que estou subindo,na verdade estou descendo.</talk>
+      <qrRead var="resposta3" key="1054" />
+      <switch var="resposta3">
+        <case op="exact" value="duplocone" key="1055" child_proc="true" var="resposta3">
+          <evaEmotion emotion="HAPPY" key="1056" />
+          <audio source="efx-blin2" block="TRUE" key="1057" />
+          <light state="ON" color="GREEN" key="1058" />
+          <talk key="1059">UAU!você é muito observador.</talk>
+          <evaEmotion emotion="NEUTRAL" key="1060" />
+          <light state="OFF" key="1061" />
+        </case>
+        <default key="1062" child_proc="true" value="" op="exact">
+          <evaEmotion emotion="SAD" key="1063" />
+          <audio source="efx-error" block="TRUE" key="1064" />
+          <light state="ON" color="RED" key="1065" />
+          <evaEmotion emotion="NEUTRAL" key="1066" />
+          <talk key="1067">Você não entendeu o experimento do duplo cone.</talk>
+          <light state="OFF" key="1068" />
+        </default>
+      </switch>
+
+    </case>
+        <case op="eq" value="4" key="1069" child_proc="true" var="$">
+          <talk key="1070">o que é? o que é? O anel de alumínio flutua devido ao campo magnético gerado no equipamento.</talk>
+      <qrRead var="resposta4" key="1071" />
+      <switch var="resposta4">
+        <case op="exact" value="anelthompson" key="1072" child_proc="true" var="resposta4">
+          <evaEmotion emotion="HAPPY" key="1073" />
+          <audio source="efx-blin2" block="TRUE" key="1074" />
+          <light state="ON" color="GREEN" key="1075" />
+          <talk key="1076">Você já possui conhecimento para fazer um trem levitar.</talk>
+          <evaEmotion emotion="NEUTRAL" key="1077" />
+          <light state="OFF" key="1078" />
+        </case>
+        <default key="1079" child_proc="true" value="" op="exact">
+          <evaEmotion emotion="SAD" key="1080" />
+          <audio source="efx-error" block="TRUE" key="1081" />
+          <light state="ON" color="RED" key="1082" />
+          <evaEmotion emotion="NEUTRAL" key="1083" />
+          <talk key="1084">Marti méqui flai não poderá se divertir no futuro se você não aprender sobre levitação magnética.</talk>
+          <light state="OFF" key="1085" />
+        </default>
+      </switch>
+    </case>
+        <case op="eq" value="5" key="1086" child_proc="true" var="$">
+          <talk key="1087">o que é? o que é ? Com as pernas bem juntinhas eu giro muito rápido,com uma perna levantada,eu giro bem devagarzinho.</talk>
+      <qrRead var="resposta5" key="1088" />
+      <switch var="resposta5">
+        <case op="exact" value="plataformagiratoria" key="1089" child_proc="true" var="resposta5">
+          <evaEmotion emotion="HAPPY" key="1090" />
+          <audio source="efx-blin2" block="TRUE" key="1091" />
+          <light state="ON" color="GREEN" key="1092" />
+          <talk key="1093">Sua pirueta foi fantástica!</talk>
+          <evaEmotion emotion="NEUTRAL" key="1094" />
+          <light state="OFF" key="1095" />
+        </case>
+        <default key="1096" child_proc="true" value="" op="exact">
+          <evaEmotion emotion="SAD" key="1097" />
+          <audio source="efx-error" block="TRUE" key="1098" />
+          <light state="ON" color="RED" key="1099" />
+          <evaEmotion emotion="NEUTRAL" key="1100" />
+          <talk key="1101">Pelo visto, você andou faltando as aulas de balé.</talk>
+          <light state="OFF" key="1102" />
+        </default>
+      </switch>
+      </case>
+        <case op="eq" value="6" key="1103" child_proc="true" var="$">
+          <talk key="1104">o que é?o que é? Meus movimentos parecem uma dança maluca,nunca faço o mesmo passo duas vezes.</talk>
+      <qrRead var="resposta6" key="1105" />
+      <switch var="resposta6">
+        <case op="exact" value="pendulocaotico" key="1106" child_proc="true" var="resposta6">
+          <evaEmotion emotion="HAPPY" key="1107" />
+          <audio source="efx-blin2" block="TRUE" key="1108" />
+          <light state="ON" color="GREEN" key="1109" />
+          <talk key="1110">Uau! Você acertou, e conseguiu acompanhar os passos do pêndulo caótico.</talk>
+          <evaEmotion emotion="NEUTRAL" key="1111" />
+          <light state="OFF" key="1112" />
+        </case>
+        <default key="1113" child_proc="true" value="" op="exact">
+          <evaEmotion emotion="SAD" key="1114" />
+          <audio source="efx-error" block="TRUE" key="1115" />
+          <light state="ON" color="RED" key="1116" />
+          <evaEmotion emotion="NEUTRAL" key="1117" />
+          <talk key="1118">Não desista, tente de novo! Grandes cientistas também erraram antes de acertar. </talk>
+          <light state="OFF" key="1119" />
+        </default>
+      </switch>
+    </case>
+        <case op="eq" value="7" key="1120" child_proc="true" var="$">
+          <talk key="1121">O que é? o que é? Com um pequeno empurrão, eu consigo levantar grandes coisas. Quanto mais longa eu for, mais forte fico. quem sou ? </talk>
+      <qrRead var="resposta7" key="1122" />
+      <switch var="resposta7">
+        <case op="exact" value="torque" key="1123" child_proc="true" var="resposta7">
+          <evaEmotion emotion="HAPPY" key="1124" />
+        <audio source="efx-blin2" block="TRUE" key="1125" />
+        <light state="ON" color="GREEN" key="1126" />
+        <talk key="1127">seu cérebro esta aplicando torque ou ele sempre é forte assim</talk>
+        <evaEmotion emotion="NEUTRAL" key="1128" />
+        <light state="OFF" key="1129" />
+        </case>
+        <default key="1130" child_proc="true" value="" op="exact">
+          <evaEmotion emotion="SAD" key="1131" />
+        <audio source="efx-error" block="TRUE" key="1132" />
+        <light state="ON" color="RED" key="1133" />
+          <evaEmotion emotion="NEUTRAL" key="1134" />
+        <talk key="1135">Quase lá! A alavanca parece mágica, mas é só física! Com ela, até uma criança pode levantar coisas bem pesadas. Vamos tentar outra vez!</talk>
+        <light state="OFF" key="1136" />
+        </default>
+      </switch>
+    </case>
+        <case op="eq" value="8" key="1137" child_proc="true" var="$">
+          <talk key="1138">O que é? o que é ? com uma só de mim sou fraca, com muitas a união faz a força </talk>
+      <qrRead var="resposta8" key="1139" />
+      <switch var="resposta8">
+        <case op="exact" value="polia" key="1140" child_proc="true" var="resposta8">
+          <evaEmotion emotion="HAPPY" key="1141" />
+          <audio source="efx-blin2" block="TRUE" key="1142" />
+          <light state="ON" color="GREEN" key="1143" />
+          <talk key="1144"> Arrasou, agora você sabe como levantar pesos de forma mais fácil</talk>
+          <evaEmotion emotion="NEUTRAL" key="1145" />
+          <light state="OFF" key="1146" />
+
+        </case>
+        <default key="1147" child_proc="true" value="" op="exact">
+          <evaEmotion emotion="SAD" key="1148" />
+          <audio source="efx-error" block="TRUE" key="1149" />
+          <light state="ON" color="RED" key="1150" />
+          <evaEmotion emotion="NEUTRAL" key="1151" />
+          <talk key="1152">não é a resposta. Precisa de uma forcinha aí?</talk>
+          <light state="OFF" key="1153" />
+        </default>
+      </switch>
+    </case>
+      <default key="1154" child_proc="false" value="" op="exact" /></switch>
+    <counter var="ITERATION_VAR1" op="+" value="1" key="1155" /><goto target="LOOP_ID1_ITERATION_VAR1" /></case><default key="1156" child_proc="false" value="" op="exact" /></switch><talk key="1157">O próximo está pronto?</talk>
+    <talk key="1158">apresente o cartão de sim ou de não?</talk>
+    <qrRead var="resp" key="1159" />
+    <switch var="resp">
+      <case op="exact" value="sim" key="1160" child_proc="true" var="resp">
+        <goto target="volta" />
+      </case>
+      <case op="exact" value="não" key="1161" child_proc="true" var="resp">
+        <talk key="1162">Tudo bem até a próxima!</talk>
+        <stop />
+      </case>
+    <default key="1163" child_proc="false" value="" op="exact" /></switch>
+  </script>
+  <links><link from="1000" to="1001" /><link from="1001" to="1002" /><link from="1002" to="1003" /><link from="1003" to="1004" /><link from="1004" to="1005" /><link from="1003" to="1006" /><link from="1006" to="1007" /><link from="1007" to="1008" /><link from="1003" to="1009" /><link from="1005" to="1010" /><link from="1008" to="1010" /><link from="1009" to="1010" /><link from="1010" to="1011" /><link from="1011" to="1012" /><link from="1012" to="1013" /><link from="1013" to="1014" /><link from="1014" to="1015" /><link from="1015" to="1016" /><link from="1016" to="1017" /><link from="1017" to="1018" /><link from="1018" to="1019" /><link from="1019" to="1020" /><link from="1020" to="1021" /><link from="1021" to="1022" /><link from="1022" to="1023" /><link from="1023" to="1024" /><link from="1024" to="1025" /><link from="1025" to="1026" /><link from="1026" to="1027" /><link from="1020" to="1028" /><link from="1028" to="1029" /><link from="1029" to="1030" /><link from="1030" to="1031" /><link from="1031" to="1032" /><link from="1032" to="1033" /><link from="1033" to="1034" /><link from="1017" to="1035" /><link from="1035" to="1036" /><link from="1036" to="1037" /><link from="1037" to="1038" /><link from="1038" to="1039" /><link from="1039" to="1040" /><link from="1040" to="1041" /><link from="1041" to="1042" /><link from="1042" to="1043" /><link from="1043" to="1044" /><link from="1037" to="1045" /><link from="1045" to="1046" /><link from="1046" to="1047" /><link from="1047" to="1048" /><link from="1048" to="1049" /><link from="1049" to="1050" /><link from="1050" to="1051" /><link from="1017" to="1052" /><link from="1052" to="1053" /><link from="1053" to="1054" /><link from="1054" to="1055" /><link from="1055" to="1056" /><link from="1056" to="1057" /><link from="1057" to="1058" /><link from="1058" to="1059" /><link from="1059" to="1060" /><link from="1060" to="1061" /><link from="1054" to="1062" /><link from="1062" to="1063" /><link from="1063" to="1064" /><link from="1064" to="1065" /><link from="1065" to="1066" /><link from="1066" to="1067" /><link from="1067" to="1068" /><link from="1017" to="1069" /><link from="1069" to="1070" /><link from="1070" to="1071" /><link from="1071" to="1072" /><link from="1072" to="1073" /><link from="1073" to="1074" /><link from="1074" to="1075" /><link from="1075" to="1076" /><link from="1076" to="1077" /><link from="1077" to="1078" /><link from="1071" to="1079" /><link from="1079" to="1080" /><link from="1080" to="1081" /><link from="1081" to="1082" /><link from="1082" to="1083" /><link from="1083" to="1084" /><link from="1084" to="1085" /><link from="1017" to="1086" /><link from="1086" to="1087" /><link from="1087" to="1088" /><link from="1088" to="1089" /><link from="1089" to="1090" /><link from="1090" to="1091" /><link from="1091" to="1092" /><link from="1092" to="1093" /><link from="1093" to="1094" /><link from="1094" to="1095" /><link from="1088" to="1096" /><link from="1096" to="1097" /><link from="1097" to="1098" /><link from="1098" to="1099" /><link from="1099" to="1100" /><link from="1100" to="1101" /><link from="1101" to="1102" /><link from="1017" to="1103" /><link from="1103" to="1104" /><link from="1104" to="1105" /><link from="1105" to="1106" /><link from="1106" to="1107" /><link from="1107" to="1108" /><link from="1108" to="1109" /><link from="1109" to="1110" /><link from="1110" to="1111" /><link from="1111" to="1112" /><link from="1105" to="1113" /><link from="1113" to="1114" /><link from="1114" to="1115" /><link from="1115" to="1116" /><link from="1116" to="1117" /><link from="1117" to="1118" /><link from="1118" to="1119" /><link from="1017" to="1120" /><link from="1120" to="1121" /><link from="1121" to="1122" /><link from="1122" to="1123" /><link from="1123" to="1124" /><link from="1124" to="1125" /><link from="1125" to="1126" /><link from="1126" to="1127" /><link from="1127" to="1128" /><link from="1128" to="1129" /><link from="1122" to="1130" /><link from="1130" to="1131" /><link from="1131" to="1132" /><link from="1132" to="1133" /><link from="1133" to="1134" /><link from="1134" to="1135" /><link from="1135" to="1136" /><link from="1017" to="1137" /><link from="1137" to="1138" /><link from="1138" to="1139" /><link from="1139" to="1140" /><link from="1140" to="1141" /><link from="1141" to="1142" /><link from="1142" to="1143" /><link from="1143" to="1144" /><link from="1144" to="1145" /><link from="1145" to="1146" /><link from="1139" to="1147" /><link from="1147" to="1148" /><link from="1148" to="1149" /><link from="1149" to="1150" /><link from="1150" to="1151" /><link from="1151" to="1152" /><link from="1152" to="1153" /><link from="1017" to="1154" /><link from="1027" to="1155" /><link from="1034" to="1155" /><link from="1044" to="1155" /><link from="1051" to="1155" /><link from="1061" to="1155" /><link from="1068" to="1155" /><link from="1078" to="1155" /><link from="1085" to="1155" /><link from="1095" to="1155" /><link from="1102" to="1155" /><link from="1112" to="1155" /><link from="1119" to="1155" /><link from="1129" to="1155" /><link from="1136" to="1155" /><link from="1146" to="1155" /><link from="1153" to="1155" /><link from="1154" to="1155" /><link from="1155" to="1016" /><link from="1155" to="1156" /><link from="1015" to="1156" /><link from="1156" to="1157" /><link from="1157" to="1158" /><link from="1158" to="1159" /><link from="1159" to="1160" /><link from="1160" to="1010" /><link from="1159" to="1161" /><link from="1161" to="1162" /><link from="1159" to="1163" /></links></evaml>
