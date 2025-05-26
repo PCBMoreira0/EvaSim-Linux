@@ -660,6 +660,13 @@ class EvaSim:
             self.sim_api_controller.command_led_animation("NULL")
             print("A wrong led animation was selected.")
 
+        if self.step_execution: 
+            self.exec_comand_event.clear()
+        self.sim_api_controller.trigger_event()
+
+        if self.step_execution: 
+            self.exec_comand_event.wait()
+
 
     # Set the Eva emotion
     def evaEmotion(self, expression):
