@@ -71,9 +71,9 @@ async def next(id:str):
     c = get_value(id)
 
     if c.eva_sim.isWaitingInput:
-            return {"status":"waiting input"}
+        return {"status":"waiting input"}
     
-    while not s:
+    while not s or not s["commands"]:
         if not c.api_sim.next_step(c.eva_sim):
             return {"status":"script is not playing"}
 

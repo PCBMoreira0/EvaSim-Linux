@@ -660,13 +660,6 @@ class EvaSim:
             self.sim_api_controller.command_led_animation("NULL")
             print("A wrong led animation was selected.")
 
-        if self.step_execution: 
-            self.exec_comand_event.clear()
-        self.sim_api_controller.trigger_event()
-
-        if self.step_execution: 
-            self.exec_comand_event.wait()
-
 
     # Set the Eva emotion
     def evaEmotion(self, expression):
@@ -834,8 +827,6 @@ class EvaSim:
     def command_led(self, node):
         # Selection of the execution mode is done within the ledAnimation() function
         self.ledAnimation(node.attrib["animation"])
-
-        self.sim_api_controller.command_led(node.attrib["animation"])
 
         self.gui.terminal.insert(INSERT, "\nSTATE: Matrix Leds. Animation = " + node.attrib["animation"])
         self.gui.terminal.see(tkinter.END) 
