@@ -757,7 +757,7 @@ class EvaSim:
         else: # Check if the old version was used
             if node.get("type") != None: # Maintaining compatibility with the old version of the motion element
                 self.gui.terminal.insert(INSERT, "\nSTATE: Moving the head! Movement type => " + node.attrib["type"], "motion")
-                self.sim_api_controller.command_motion("type", node.attrib["type"])
+                self.sim_api_controller.command_motion("head", node.attrib["type"])
                 self.gui.terminal.see(tkinter.END)
         print("Moving the head and/or the arms.")
         if self.RUNNING_MODE == "EVA_ROBOT":
@@ -820,7 +820,7 @@ class EvaSim:
     def command_wait(self, node):
         duration = node.attrib["duration"]
         self.gui.terminal.insert(INSERT, "\nSTATE: Pausing. Duration = " + duration + " ms")
-        self.sim_api_controller.command_wait(int(duration))
+        self.sim_api_controller.command_wait(int(duration)/1000)
         self.gui.terminal.see(tkinter.END)
         # time.sleep(int(duration)/1000) # Convert to seconds
 
@@ -959,7 +959,9 @@ class EvaSim:
         ind_random = rnd.randint(0, len(texto)-1)
         self.gui.terminal.insert(INSERT, '\nSTATE: Speaking: "' + texto[ind_random] + '"')
         
+        self.ledAnimation("SPEAK")
         self.sim_api_controller.command_talk(texto[ind_random])
+        
         self.gui.terminal.see(tkinter.END)
 
         if self.RUNNING_MODE == "EVA_ROBOT":
@@ -1471,7 +1473,7 @@ class EvaSim:
     
 
         elif node.tag == "light":
-            self.command_light
+            self.command_light(node)
     
 
         elif node.tag == "wait":

@@ -54,7 +54,8 @@ class SIM_APIController:
         # self.current_command.update(command)
 
     def command_end(self):
-        self.command_list.append({"command" : Commands.END})
+        pass
+        # self.command_list.append({"command" : Commands.END})
         # self.current_command.update({"command" : Commands.END})
 
     def command_wait(self, ms : int):
