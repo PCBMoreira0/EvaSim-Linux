@@ -1,4 +1,5 @@
 from datetime import datetime
+import hashlib
 from fastapi import APIRouter, HTTPException
 import uuid
 
@@ -216,3 +217,18 @@ async def get_emotion(file : UploadFile):
     result = await loop.run_in_executor(executor, emotion.run_from_image, await file.read())
     
     return {"result": result}
+
+
+# TTS Watson
+@router.post("/tts")
+async def get_tts_watson(input : InputModel):
+    hash_object = hashlib.md5(input.input.encode())
+    tone_voice = "pt-BR_IsabelaV3Voice"
+    file_name = "_audio_"  + tone_voice + hash_object.hexdigest()
+    
+    if (os.path.isfile("audio_cache_files/" + file_name + ".mp3")):
+        audio_path = "audio_cache_files/" + file_name + ".mp3"
+        audio = open(audio_path, "rb")
+        return StreamingResponse(audio, media_type="audio/mpeg")
+    
+    raise HTTPException(status_code=404, detail="Arquivo de áudio não encontrado.")
