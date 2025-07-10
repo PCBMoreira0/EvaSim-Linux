@@ -403,11 +403,6 @@ class EvaSim:
         self.gui.bt_import.bind("<Button-1>", self.importFileThread)
         self.play = False # desativa a var de self.play do script. Faz com que o script seja interrompido
 
-        # Unblock the thread to finish the script
-        if self.step_execution:
-            self.exec_comand_event.set()
-            self.exec_comand_event.clear()
-
         self.EVA_ROBOT_STATE = "FREE" # libera a execução, caso esteja executando algum comando bloqueante
 
     # Import file thread
@@ -1607,7 +1602,13 @@ class EvaSim:
                     self.exec_comando(self.busca_commando(to_key))
                     print("End of block.")
         
+        # Unblock the thread to finish the script
+        if self.step_execution:
+            self.exec_comand_event.set()
+            self.exec_comand_event.clear()
+            
         self.sim_api_controller.command_end()
+        self.sim_api_controller.trigger_event()
 
         self.gui.terminal.insert(INSERT, "\nSTATE: End of script.")
         self.gui.terminal.see(tkinter.END)

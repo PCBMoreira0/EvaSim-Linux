@@ -15,7 +15,7 @@ class Commands(str, Enum):
     USER_EMOTION = "User_emotion"
     QR_READ = "QR_Read"
     USER_ID = "User_id"
-    END = "End of script"
+    END = "End"
 
 class SIM_APIController:
     def __init__(self, id):
@@ -54,8 +54,7 @@ class SIM_APIController:
         # self.current_command.update(command)
 
     def command_end(self):
-        pass
-        # self.command_list.append({"command" : Commands.END})
+        self.command_list.append({"command" : Commands.END})
         # self.current_command.update({"command" : Commands.END})
 
     def command_wait(self, ms : int):
