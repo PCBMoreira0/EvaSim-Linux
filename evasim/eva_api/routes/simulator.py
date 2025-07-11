@@ -24,6 +24,29 @@ import speech_recognition
 
 import os
 
+from ibm_watson import TextToSpeechV1
+from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
+
+# Função para configurar o serviço TTS
+def configure_tts():
+    # Lê as credenciais do arquivo
+    with open("ibm_cred.txt", "r") as ibm_cred:
+        ibm_config = ibm_cred.read().splitlines()
+
+    apikey = ibm_config[0]
+    url = ibm_config[1]
+
+    # Configuração do autenticador e do serviço
+    authenticator = IAMAuthenticator(apikey)
+    tts = TextToSpeechV1(authenticator=authenticator)
+    tts.set_service_url(url)
+
+    return tts
+
+# Agora você pode chamar essa função para obter o objeto tts em qualquer parte do código
+tts = configure_tts()
+
+
 class InputModel(BaseModel):
     input : str
 
@@ -191,7 +214,7 @@ def process_stt(file):
         # for testing purposes, we're just using the default API key
         # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
         # instead of `r.recognize_google(audio)` 
-        result = r.recognize_google(audio)
+        result = r.recognize_google(audio, language="pt-BR")
         if result is None: 
             return {"error":"Could not transcribe the audio"}
         return {"result":result}
@@ -206,7 +229,7 @@ def process_stt(file):
 async def get_stt(file : UploadFile):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(executor, process_stt, await file.read())
-    
+    print("STT: " + result["result"])
     return result
 
 #user emotion
@@ -230,5 +253,31 @@ async def get_tts_watson(input : InputModel):
         audio_path = "audio_cache_files/" + file_name + ".mp3"
         audio = open(audio_path, "rb")
         return StreamingResponse(audio, media_type="audio/mpeg")
+    else:
+        audio_file_is_ok = False
+        while(not audio_file_is_ok):
+            # Eva TTS functions
+            audio_ext = ".mp3"
+            ibm_audio_ext = "audio/mp3"
+            with open("audio_cache_files/" + file_name + audio_ext, 'wb') as audio_file:
+                try:
+                    res = tts.synthesize(input.input, accept = ibm_audio_ext, voice = tone_voice).get_result()
+                    audio_file.write(res.content)
+                    audio_path = "audio_cache_files/" + file_name + ".mp3"
+                    audio = open(audio_path, "rb")
+                    return StreamingResponse(audio, media_type="audio/mpeg")
+                    # self.playsound("audio_cache_files/" + file_name + audio_ext, block = True) # self.play the audio of the speech
+                except:
+                    print("Voice exception")
+                    print("\nError when trying to select voice tone, please verify the tone atribute.\n", "error")
+                    return {"error":"Error when trying to select voice tone, please verify the tone atribute."}
+                
+            file_size = os.path.getsize("audio_cache_files/" + file_name + self.audio_ext)
+            if file_size == 0: # Corrupted file
+                print("#### Corrupted file.. (It's necessary to use the same implementation like in tts-module in EVA robot!)")
+                os.remove("audio_cache_files/" + file_name + self.audio_ext)
+            else:
+                audio_file_is_ok = True
+    
     
     raise HTTPException(status_code=404, detail="Arquivo de áudio não encontrado.")
