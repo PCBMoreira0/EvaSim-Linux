@@ -29,17 +29,20 @@ from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 
 # Função para configurar o serviço TTS
 def configure_tts():
-    # Lê as credenciais do arquivo
-    with open("ibm_cred.txt", "r") as ibm_cred:
-        ibm_config = ibm_cred.read().splitlines()
+    try:
+        # Lê as credenciais do arquivo
+        with open("ibm_cred.txt", "r") as ibm_cred:
+            ibm_config = ibm_cred.read().splitlines()
 
-    apikey = ibm_config[0]
-    url = ibm_config[1]
+        apikey = ibm_config[0]
+        url = ibm_config[1]
 
-    # Configuração do autenticador e do serviço
-    authenticator = IAMAuthenticator(apikey)
-    tts = TextToSpeechV1(authenticator=authenticator)
-    tts.set_service_url(url)
+        # Configuração do autenticador e do serviço
+        authenticator = IAMAuthenticator(apikey)
+        tts = TextToSpeechV1(authenticator=authenticator)
+        tts.set_service_url(url)
+    except:
+        return None
 
     return tts
 
