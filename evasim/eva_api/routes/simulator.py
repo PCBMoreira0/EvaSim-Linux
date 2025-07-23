@@ -41,10 +41,10 @@ def configure_tts():
         authenticator = IAMAuthenticator(apikey)
         tts = TextToSpeechV1(authenticator=authenticator)
         tts.set_service_url(url)
+        return tts
     except:
+        print("ERROR setting TTS")
         return None
-
-    return tts
 
 # Agora você pode chamar essa função para obter o objeto tts em qualquer parte do código
 tts = configure_tts()
